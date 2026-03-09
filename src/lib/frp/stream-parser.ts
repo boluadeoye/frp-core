@@ -9,20 +9,14 @@ export interface ForensicHeader {
 }
 
 export class StreamParser {
-  // We only need the first 256KB to find EXIF (APP1) and C2PA (JUMBF) markers
-  private static readonly CHUNK_SIZE_LIMIT = 256 * 1024; 
+  // Reduced to 16KB. Sufficient for EXIF/C2PA headers and token-safe for AI.
+  private static readonly CHUNK_SIZE_LIMIT = 16 * 1024; 
 
-  /**
-   * Performs a partial stream fetch to extract headers without loading the full image into Edge memory.
-   * Now uses EntropyRouter to bypass CDN blocks (like Wikimedia).
-   */
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
-    console.log(`[FRP] Initiating Surgical Stream: ${imageUrl.substring(0, 50)}...`);
+    console.log(`[FRP] Initiating 16KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
     
-    // Generate organic headers to bypass "Bot" detection
-    // We pass an empty string for the API key since this is a public image fetch
     const organicHeaders = EntropyRouter.getHeaders("");
-    delete (organicHeaders as any)["Authorization"]; // Remove Auth for public images
+    delete (organicHeaders as any)["Authorization"];
 
     const response = await fetch(imageUrl, {
       headers: {
@@ -52,25 +46,21 @@ export class StreamParser {
     try {
       while (true) {
         const { done, value } = await reader.read();
-
         if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
           await reader.cancel();
           break;
         }
-
         chunks.push(value);
         receivedLength += value.length;
 
-        // Byte-pattern check for JPEG markers
         const chunkStr = Array.from(value.slice(0, 100))
           .map(b => b.toString(16).padStart(2, '0'))
           .join('');
-
         if (chunkStr.includes('ffe1')) exifFound = true;
         if (chunkStr.includes('ffe2')) c2paFound = true;
       }
     } catch (error) {
-      console.warn('[FRP] Stream interrupted early, proceeding with extracted bytes.');
+      console.warn('[FRP] Stream interrupted.');
     }
 
     const combinedBuffer = new Uint8Array(receivedLength);
