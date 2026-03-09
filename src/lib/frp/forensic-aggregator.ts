@@ -9,24 +9,32 @@ export class ForensicAggregator {
     console.log(`[AGGREGATOR] Starting Trace: ${traceId}`);
 
     try {
-      // 1. Key Check
       const key = await KeyManager.getValidKey();
-      if (!key) throw new Error("POOL_EMPTY: No active Groq keys found in Neon.");
+      if (!key) throw new Error("POOL_EMPTY: No active Groq keys found.");
       console.log(`[AGGREGATOR] Using Key: ${key.id.substring(0,8)}`);
 
-      // 2. Vision Call
+      // Groq Vision Payload Structure
       const payload = {
-        model: "llama-3.2-11b-vision-preview", 
-        messages: [
+        model: "llama-3.2-11b-vision-preview",
+        messages:[
           {
             role: "user",
-            content: [
-              { type: "text", text: "Analyze this image for forensic anomalies. Return JSON: { 'confidence_score': 0.0-1.0, 'analysis': 'string' }" },
-              { type: "image_url", image_url: { url: imageUrl } }
+            content:[
+              {
+                type: "text",
+                text: "Analyze this image for forensic anomalies. Return ONLY a valid JSON object in this exact format: {\"confidence_score\": 0.95, \"analysis\": \"No diffusion noise detected.\"} Do not include markdown formatting or any other text."
+              },
+              {
+                type: "image_url",
+                image_url: {
+                  url: imageUrl
+                }
+              }
             ]
           }
         ],
-        response_format: { type: "json_object" }
+        temperature: 0.1,
+        max_tokens: 256
       };
 
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -36,14 +44,18 @@ export class ForensicAggregator {
       });
 
       if (!response.ok) {
+        const errText = await response.text();
         if (response.status === 429) await KeyManager.reportRateLimit(key.id);
-        throw new Error(`GROQ_API_ERROR: ${response.status}`);
+        throw new Error(`GROQ_API_ERROR: ${response.status} - ${errText}`);
       }
 
       const data = await response.json();
-      const analysis = JSON.parse(data.choices[0].message.content);
+      const resultText = data.choices[0].message.content;
+      
+      // Clean the response in case the model included markdown (e.g., ```json)
+      const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const analysis = JSON.parse(cleanedText);
 
-      // 3. Ledger Update
       await db.update(auditLedger)
         .set({
           status: "verified",
@@ -55,21 +67,12 @@ export class ForensicAggregator {
 
       console.log(`[AGGREGATOR] Success: ${traceId} - FCS: ${analysis.confidence_score}`);
 
-      // 4. Webhook
-      if (callbackUrl) {
-        await fetch(callbackUrl, {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ traceId, fcs: analysis.confidence_score })
-        });
-      }
-
     } catch (error: any) {
       console.error(`[AGGREGATOR] Critical Failure: ${error.message}`);
       await db.update(auditLedger)
         .set({ status: "failed", forensicManifest: { error: error.message } })
         .where(eq(auditLedger.requestId, traceId))
-        .catch(() => console.error("DB_UPDATE_FAILED_DURING_ERROR_HANDLING"));
+        .catch(() => console.error("DB_UPDATE_FAILED"));
     }
   }
 }
