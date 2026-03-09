@@ -1,5 +1,5 @@
 import { db } from "@/db";
-import { auditLedger } from "@/db/schema";
+import { auditLedger, burnRegistry } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
@@ -15,37 +15,49 @@ export class ForensicAggregator {
     return btoa(binary);
   }
 
-  static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array) {
-    console.log(`[AGGREGATOR] Starting 8KB Audit: ${traceId}`);
+  static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string) {
+    console.log(`[AGGREGATOR] Weaponized Audit Started: ${traceId}`);
 
     try {
+      // 1. THE BURN REGISTRY CHECK (Instant Kill)
+      const burned = await db.query.burnRegistry.findFirst({
+        where: eq(burnRegistry.hash, headerHash)
+      });
+
+      if (burned) {
+        console.warn(`[AGGREGATOR] HASH MATCH FOUND IN BURN REGISTRY. TERMINATING.`);
+        await db.update(auditLedger)
+          .set({
+            status: "flagged",
+            fcsScore: "0.000",
+            forensicManifest: { 
+              reason: "Blacklisted Fingerprint", 
+              registry_match: true,
+              original_flag_reason: burned.reason 
+            },
+            completedAt: new Date()
+          })
+          .where(eq(auditLedger.requestId, traceId));
+        return;
+      }
+
+      // 2. PROCEED TO AI PHYSICS AUDIT
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
-      // Switching to 70B Versatile - Better instruction following than 20B
       const modelId = "llama-3.3-70b-versatile";
       const base64Header = this.toBase64Safe(headerBuffer);
-      console.log(`[AGGREGATOR] Payload: ${base64Header.length} chars (~${Math.round(base64Header.length/4)} tokens).`);
 
       const payload = {
         model: modelId,
         messages:[
           {
             role: "system",
-            content: "You are a Forensic Auditor. Your task is to inspect the provided Base64 image header for strings like 'Adobe', 'Photoshop', 'Canva', or 'GIMP'. If these are found, it indicates the image has been edited. You must respond ONLY with a JSON object. No preamble, no explanation."
+            content: "You are a Forensic Auditor. Analyze the Base64 image header. Look for 'Adobe', 'Photoshop', or 'Canva'. Also, check if the metadata structure is consistent with a raw camera sensor. Return ONLY JSON: {\"confidence_score\": 0.0-1.0, \"analysis\": \"string\"}"
           },
           {
             role: "user",
-            content: `Analyze the following image header data:
-<header_data>
-${base64Header}
-</header_data>
-
-Return JSON format:
-{
-  "confidence_score": 0.0 to 1.0,
-  "analysis": "detailed forensic findings"
-}`
+            content: `Header Fingerprint: ${headerHash}\nHeader Bytes: ${base64Header}`
           }
         ],
         temperature: 0.1,
@@ -58,28 +70,34 @@ Return JSON format:
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`GROQ_ERROR: ${response.status} - ${errText.substring(0, 100)}`);
-      }
+      if (!response.ok) throw new Error(`GROQ_ERROR: ${response.status}`);
 
       const data = await response.json();
-      const resultText = data.choices[0].message.content;
-      
-      // Robust parsing
-      const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
-      const analysis = JSON.parse(cleanedText);
+      const analysis = JSON.parse(data.choices[0].message.content);
+
+      // 3. UPDATE LEDGER & AUTO-BURN IF FRAUD DETECTED
+      const finalScore = analysis.confidence_score || 0;
 
       await db.update(auditLedger)
         .set({
-          status: "verified",
-          fcsScore: (analysis.confidence_score || 0).toString(),
+          status: finalScore < 0.4 ? "flagged" : "verified",
+          fcsScore: finalScore.toString(),
+          headerHash: headerHash,
           forensicManifest: { visual: analysis.analysis, model: modelId },
           completedAt: new Date()
         })
         .where(eq(auditLedger.requestId, traceId));
 
-      console.log(`[AGGREGATOR] Success: ${traceId} - FCS: ${analysis.confidence_score}`);
+      if (finalScore < 0.2) {
+        console.log(`[AGGREGATOR] AUTO-BURNING HASH: ${headerHash}`);
+        await db.insert(burnRegistry).values({
+          hash: headerHash,
+          reason: `Auto-flagged: FCS Score ${finalScore}`,
+          severity: "1.00"
+        }).onConflictDoNothing();
+      }
+
+      console.log(`[AGGREGATOR] Success: ${traceId} - FCS: ${finalScore}`);
 
     } catch (error: any) {
       console.error(`[AGGREGATOR] Failure: ${error.message}`);

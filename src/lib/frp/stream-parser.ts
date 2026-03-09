@@ -4,13 +4,21 @@ export interface ForensicHeader {
   exifFound: boolean;
   c2paFound: boolean;
   buffer: Uint8Array;
+  hash: string; // SHA-256 Fingerprint
   contentType: string | null;
-  contentLength: number;
 }
 
 export class StreamParser {
-  // Reduced to 8KB for absolute safety on Free Tier token limits.
   private static readonly CHUNK_SIZE_LIMIT = 8 * 1024; 
+
+  /**
+   * Generates a SHA-256 hash of the buffer for the Burn Registry.
+   */
+  private static async generateHash(buffer: Uint8Array): Promise<string> {
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashArray = Array.from(new Uint8Array(hashBuffer));
+    return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+  }
 
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
     console.log(`[FRP] Initiating 8KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
@@ -26,41 +34,31 @@ export class StreamParser {
     });
     
     if (!response.ok && response.status !== 206) {
-      const errorText = await response.text();
-      throw new Error(`[FRP] Target rejected stream: ${errorText.substring(0, 100)}`);
+      throw new Error(`[FRP] Target rejected stream: ${response.status}`);
     }
 
-    const contentType = response.headers.get('content-type');
-    const contentLength = parseInt(response.headers.get('content-length') || '0', 10);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("[FRP] No stream body");
 
-    if (!response.body) {
-      throw new Error('[FRP] Target returned empty body stream.');
-    }
-
-    const reader = response.body.getReader();
     const chunks: Uint8Array[] = [];
     let receivedLength = 0;
     let exifFound = false;
     let c2paFound = false;
 
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
-          await reader.cancel();
-          break;
-        }
-        chunks.push(value);
-        receivedLength += value.length;
-
-        const chunkStr = Array.from(value.slice(0, 100))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        if (chunkStr.includes('ffe1')) exifFound = true;
-        if (chunkStr.includes('ffe2')) c2paFound = true;
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
+        await reader.cancel();
+        break;
       }
-    } catch (error) {
-      console.warn('[FRP] Stream interrupted.');
+      chunks.push(value);
+      receivedLength += value.length;
+
+      const chunkStr = Array.from(value.slice(0, 100))
+        .map(b => b.toString(16).padStart(2, '0'))
+        .join('');
+      if (chunkStr.includes('ffe1')) exifFound = true;
+      if (chunkStr.includes('ffe2')) c2paFound = true;
     }
 
     const combinedBuffer = new Uint8Array(receivedLength);
@@ -70,12 +68,15 @@ export class StreamParser {
       position += chunk.length;
     }
 
+    // Generate the Cryptographic Fingerprint
+    const hash = await this.generateHash(combinedBuffer);
+
     return {
       exifFound,
       c2paFound,
       buffer: combinedBuffer,
-      contentType,
-      contentLength: contentLength > receivedLength ? contentLength : receivedLength
+      hash,
+      contentType: response.headers.get('content-type')
     };
   }
 }

@@ -17,7 +17,7 @@ export async function POST(req: Request) {
 
     const traceId = crypto.randomUUID();
 
-    // 1. Surgical Header Extraction
+    // 1. Surgical Header Extraction & Hashing
     const headerData = await StreamParser.extractHeaders(imageUrl);
 
     // 2. Log to Ledger
@@ -25,16 +25,18 @@ export async function POST(req: Request) {
       agentId,
       requestId: traceId,
       imageUrlRef: imageUrl,
+      headerHash: headerData.hash,
       status: 'processing',
       forensicManifest: { preliminary: { exifDetected: headerData.exifFound } }
     });
 
-    // 3. Execute Audit (Passing the actual binary buffer)
-    await ForensicAggregator.processAudit(traceId, imageUrl, headerData.buffer);
+    // 3. Execute Weaponized Audit
+    await ForensicAggregator.processAudit(traceId, imageUrl, headerData.buffer, headerData.hash);
 
     return NextResponse.json({
       status: 'completed',
       traceId,
+      fingerprint: headerData.hash,
       fcs_preliminary: headerData.exifFound ? 0.8 : 0.2
     }, { status: 200 });
 
