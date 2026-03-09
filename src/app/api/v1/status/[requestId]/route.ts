@@ -7,11 +7,12 @@ export const runtime = 'edge';
 
 export async function GET(
   req: Request,
-  { params }: { params: { requestId: string } }
+  { params }: { params: Promise<{ requestId: string }> }
 ) {
   try {
-    // Next.js 15 params are async
-    const { requestId } = await params;
+    // Await the params object as required by Next.js 15+
+    const resolvedParams = await params;
+    const { requestId } = resolvedParams;
 
     const audit = await db.query.auditLedger.findFirst({
       where: eq(auditLedger.requestId, requestId),
