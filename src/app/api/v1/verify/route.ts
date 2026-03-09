@@ -12,13 +12,12 @@ export async function POST(req: Request) {
     const { imageUrl, agentId } = body;
 
     if (!imageUrl || !agentId) {
-      return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
     const traceId = crypto.randomUUID();
-    console.log(`[FRP-SYNC] Audit Started: ${traceId}`);
 
-    // 1. Extract Headers
+    // 1. Surgical Header Extraction
     const headerData = await StreamParser.extractHeaders(imageUrl);
 
     // 2. Log to Ledger
@@ -30,19 +29,17 @@ export async function POST(req: Request) {
       forensicManifest: { preliminary: { exifDetected: headerData.exifFound } }
     });
 
-    // 3. FORCE SYNCHRONOUS EXECUTION (For Debugging)
-    console.log(`[FRP-SYNC] Waiting for Groq Vision...`);
-    await ForensicAggregator.processAudit(traceId, imageUrl);
-    console.log(`[FRP-SYNC] Groq Vision Completed.`);
+    // 3. Execute Audit (Passing the actual binary buffer)
+    await ForensicAggregator.processAudit(traceId, imageUrl, headerData.buffer);
 
     return NextResponse.json({
       status: 'completed',
       traceId,
-      message: 'Check Neon Ledger for FCS Score.'
+      fcs_preliminary: headerData.exifFound ? 0.8 : 0.2
     }, { status: 200 });
 
   } catch (error: any) {
-    console.error('[FRP-SYNC] Fatal Error:', error.message);
+    console.error('[FRP] Error:', error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
