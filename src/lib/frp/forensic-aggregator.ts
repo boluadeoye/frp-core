@@ -5,100 +5,71 @@ import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
 
 export class ForensicAggregator {
-  /**
-   * Background process to analyze the image using Groq Vision and update the ledger.
-   */
   static async processAudit(traceId: string, imageUrl: string, callbackUrl?: string) {
-    console.log(`[FRP-Aggregator] Starting deep audit for Trace: ${traceId}`);
+    console.log(`[AGGREGATOR] Starting Trace: ${traceId}`);
 
     try {
-      // 1. Check out a Groq API Key from the Pool
+      // 1. Key Check
       const key = await KeyManager.getValidKey();
-      if (!key) {
-        throw new Error("No available API keys in the pool.");
-      }
+      if (!key) throw new Error("POOL_EMPTY: No active Groq keys found in Neon.");
+      console.log(`[AGGREGATOR] Using Key: ${key.id.substring(0,8)}`);
 
-      // 2. Prepare the Forensic Prompt for Llama 4 Scout
-      const systemPrompt = `You are a Deloitte-trained forensic image analyst. Analyze this image for physical inconsistencies. 
-Look for: 1. Inconsistent light source vectors (shadows not matching). 2. Diffusion noise or GAN artifacts. 3. Spatial anomalies.
-You must respond ONLY with a valid JSON object in this exact format:
-{"confidence_score": 0.95, "visual_trace": "No diffusion noise detected. Shadows align with a single top-left light source."}`;
-
+      // 2. Vision Call
       const payload = {
-        model: "llama-3.2-11b-vision-preview", // Fallback/Current Groq Vision Model ID. Update to Llama 4 Scout ID when fully mapped.
+        model: "llama-3.2-11b-vision-preview", 
         messages: [
           {
             role: "user",
-            content:[
-              { type: "text", text: systemPrompt },
+            content: [
+              { type: "text", text: "Analyze this image for forensic anomalies. Return JSON: { 'confidence_score': 0.0-1.0, 'analysis': 'string' }" },
               { type: "image_url", image_url: { url: imageUrl } }
             ]
           }
         ],
-        temperature: 0.1, // Low temperature for deterministic forensic analysis
-        max_tokens: 256,
         response_format: { type: "json_object" }
       };
 
-      // 3. Execute the Vision API Call with Entropy Headers
-      const headers = EntropyRouter.getHeaders(key.keyValue);
-      
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
-        headers,
+        headers: EntropyRouter.getHeaders(key.keyValue),
         body: JSON.stringify(payload)
       });
 
-      if (response.status === 429) {
-        await KeyManager.reportRateLimit(key.id);
-        throw new Error("Rate limit hit. Key benched.");
-      }
-
       if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`Groq API Error: ${errText}`);
+        if (response.status === 429) await KeyManager.reportRateLimit(key.id);
+        throw new Error(`GROQ_API_ERROR: ${response.status}`);
       }
 
       const data = await response.json();
-      const resultText = data.choices[0].message.content;
-      const analysis = JSON.parse(resultText);
+      const analysis = JSON.parse(data.choices[0].message.content);
 
-      // 4. Update the Neon Ledger with the Final FCS
+      // 3. Ledger Update
       await db.update(auditLedger)
         .set({
           status: "verified",
           fcsScore: analysis.confidence_score.toString(),
-          forensicManifest: {
-            visual_analysis: analysis.visual_trace,
-            model_used: payload.model
-          },
+          forensicManifest: { visual: analysis.analysis },
           completedAt: new Date()
         })
         .where(eq(auditLedger.requestId, traceId));
 
-      console.log(`[FRP-Aggregator] Audit ${traceId} completed. FCS: ${analysis.confidence_score}`);
+      console.log(`[AGGREGATOR] Success: ${traceId} - FCS: ${analysis.confidence_score}`);
 
-      // 5. Dispatch Webhook (If requested by the AI Agent)
+      // 4. Webhook
       if (callbackUrl) {
         await fetch(callbackUrl, {
           method: "POST",
           headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            traceId,
-            status: "verified",
-            fcsScore: analysis.confidence_score,
-            manifest: analysis.visual_trace
-          })
-        }).catch(e => console.warn(`[FRP-Aggregator] Webhook dispatch failed: ${e.message}`));
+          body: JSON.stringify({ traceId, fcs: analysis.confidence_score })
+        });
       }
 
     } catch (error: any) {
-      console.error(`[FRP-Aggregator] Audit ${traceId} failed:`, error.message);
-      
-      // Mark as failed in the ledger
+      console.error(`[AGGREGATOR] Critical Failure: ${error.message}`);
       await db.update(auditLedger)
-        .set({ status: "failed", forensicManifest: { error: error.message }, completedAt: new Date() })
-        .where(eq(auditLedger.requestId, traceId));
+        .set({ status: "failed", forensicManifest: { error: error.message } })
+        .where(eq(auditLedger.requestId, traceId))
+        .catch(() => console.error("DB_UPDATE_FAILED_DURING_ERROR_HANDLING"));
     }
   }
 }
