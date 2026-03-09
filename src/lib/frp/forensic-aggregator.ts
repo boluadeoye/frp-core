@@ -11,18 +11,20 @@ export class ForensicAggregator {
     try {
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY: No active Groq keys found.");
-      console.log(`[AGGREGATOR] Using Key: ${key.id.substring(0,8)}`);
+      
+      // TARGET MODEL: LLAMA 4 SCOUT
+      const modelId = "llama-4-scout";
+      console.log(`[AGGREGATOR] Using Key: ${key.id.substring(0,8)} | Model: ${modelId}`);
 
-      // UPGRADED TO LLAMA 4 SCOUT
       const payload = {
-        model: "llama-3.2-90b-vision-preview", // Using 90B as the stable high-tier fallback if Scout ID is restricted
+        model: modelId,
         messages:[
           {
             role: "user",
             content:[
               {
                 type: "text",
-                text: "Analyze this image for forensic anomalies. Return ONLY a valid JSON object: {\"confidence_score\": 0.95, \"analysis\": \"string\"}"
+                text: "Analyze this image for forensic anomalies (shadows, pixel artifacts, metadata consistency). Return ONLY a valid JSON object: {\"confidence_score\": 0.95, \"analysis\": \"string\"}"
               },
               {
                 type: "image_url",
@@ -58,7 +60,7 @@ export class ForensicAggregator {
         .set({
           status: "verified",
           fcsScore: analysis.confidence_score.toString(),
-          forensicManifest: { visual: analysis.analysis, model: "llama-3.2-90b-vision" },
+          forensicManifest: { visual: analysis.analysis, model: modelId },
           completedAt: new Date()
         })
         .where(eq(auditLedger.requestId, traceId));
