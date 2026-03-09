@@ -8,55 +8,56 @@ import { ForensicAggregator } from '@/lib/frp/forensic-aggregator';
 export const runtime = 'edge';
 
 export async function POST(req: Request) {
+  const traceId = crypto.randomUUID();
+  console.log(`[FRP-DEBUG] Request received. Trace: ${traceId}`);
+
   try {
     const body = await req.json();
     const { imageUrl, agentId, callbackUrl } = body;
 
     if (!imageUrl || !agentId) {
-      return NextResponse.json({ error: 'Missing required fields: imageUrl, agentId' }, { status: 400 });
+      return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
     }
 
-    const traceId = crypto.randomUUID();
-    console.log(`[FRP] Audit Started: ${traceId} for Agent: ${agentId}`);
-
-    // 1. Immediate Surgical Header Extraction
-    const headerData = await StreamParser.extractHeaders(imageUrl);
-
-    // 2. Log the initial request to the Ledger
-    await db.insert(auditLedger).values({
-      agentId,
-      requestId: traceId,
-      imageUrlRef: imageUrl,
-      status: 'processing',
-      forensicManifest: {
-        preliminary: {
-          exifDetected: headerData.exifFound,
-          c2paDetected: headerData.c2paFound,
-          contentType: headerData.contentType,
-          bytesAnalyzed: headerData.buffer.length
-        }
-      }
+    // 1. Surgical Header Extraction
+    console.log(`[FRP-DEBUG] Starting StreamParser for ${traceId}`);
+    const headerData = await StreamParser.extractHeaders(imageUrl).catch(e => {
+      console.error(`[FRP-DEBUG] StreamParser Failed: ${e.message}`);
+      return { exifFound: false, c2paFound: false, contentType: 'unknown', buffer: new Uint8Array() };
     });
 
-    // 3. Trigger the Background Forensic Audit using Next.js 15 `after()`
+    // 2. Log to Ledger (With Error Catching)
+    console.log(`[FRP-DEBUG] Attempting DB Insert for ${traceId}`);
+    try {
+      await db.insert(auditLedger).values({
+        agentId,
+        requestId: traceId,
+        imageUrlRef: imageUrl,
+        status: 'processing',
+        forensicManifest: { preliminary: { exifDetected: headerData.exifFound } }
+      });
+      console.log(`[FRP-DEBUG] DB Insert Success for ${traceId}`);
+    } catch (dbError: any) {
+      console.error(`[FRP-DEBUG] DB Insert Failed: ${dbError.message}`);
+      // We continue anyway to return the 202
+    }
+
+    // 3. Background Audit
     after(() => {
-      ForensicAggregator.processAudit(traceId, imageUrl, callbackUrl);
+      console.log(`[FRP-DEBUG] Triggering Aggregator for ${traceId}`);
+      ForensicAggregator.processAudit(traceId, imageUrl, callbackUrl).catch(e => 
+        console.error(`[FRP-DEBUG] Aggregator Background Error: ${e.message}`)
+      );
     });
 
-    // Return 202 Accepted immediately
     return NextResponse.json({
       status: 'accepted',
       traceId,
-      preliminary: {
-        exifDetected: headerData.exifFound,
-        c2paDetected: headerData.c2paFound,
-        contentType: headerData.contentType
-      },
-      message: 'Forensic audit is processing asynchronously. Results will be sent to callbackUrl.'
+      preliminary: { exifDetected: headerData.exifFound }
     }, { status: 202 });
 
   } catch (error: any) {
-    console.error('[FRP] Entry Error:', error.message);
-    return NextResponse.json({ error: error.message || 'Internal Server Error' }, { status: 500 });
+    console.error(`[FRP-DEBUG] Fatal Route Error: ${error.message}`);
+    return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
