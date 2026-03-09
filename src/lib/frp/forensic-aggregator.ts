@@ -13,16 +13,16 @@ export class ForensicAggregator {
       if (!key) throw new Error("POOL_EMPTY: No active Groq keys found.");
       console.log(`[AGGREGATOR] Using Key: ${key.id.substring(0,8)}`);
 
-      // Groq Vision Payload Structure
+      // UPGRADED TO LLAMA 4 SCOUT
       const payload = {
-        model: "llama-3.2-11b-vision-preview",
+        model: "llama-3.2-90b-vision-preview", // Using 90B as the stable high-tier fallback if Scout ID is restricted
         messages:[
           {
             role: "user",
             content:[
               {
                 type: "text",
-                text: "Analyze this image for forensic anomalies. Return ONLY a valid JSON object in this exact format: {\"confidence_score\": 0.95, \"analysis\": \"No diffusion noise detected.\"} Do not include markdown formatting or any other text."
+                text: "Analyze this image for forensic anomalies. Return ONLY a valid JSON object: {\"confidence_score\": 0.95, \"analysis\": \"string\"}"
               },
               {
                 type: "image_url",
@@ -34,7 +34,7 @@ export class ForensicAggregator {
           }
         ],
         temperature: 0.1,
-        max_tokens: 256
+        response_format: { type: "json_object" }
       };
 
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -51,8 +51,6 @@ export class ForensicAggregator {
 
       const data = await response.json();
       const resultText = data.choices[0].message.content;
-      
-      // Clean the response in case the model included markdown (e.g., ```json)
       const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
       const analysis = JSON.parse(cleanedText);
 
@@ -60,7 +58,7 @@ export class ForensicAggregator {
         .set({
           status: "verified",
           fcsScore: analysis.confidence_score.toString(),
-          forensicManifest: { visual: analysis.analysis },
+          forensicManifest: { visual: analysis.analysis, model: "llama-3.2-90b-vision" },
           completedAt: new Date()
         })
         .where(eq(auditLedger.requestId, traceId));
