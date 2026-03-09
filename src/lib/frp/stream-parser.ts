@@ -13,9 +13,10 @@ export class StreamParser {
 
   /**
    * Generates a SHA-256 hash of the buffer for the Burn Registry.
+   * Casts to 'any' to bypass Next.js 16 / SharedArrayBuffer type strictness.
    */
   private static async generateHash(buffer: Uint8Array): Promise<string> {
-    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer);
+    const hashBuffer = await crypto.subtle.digest('SHA-256', buffer as any);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
@@ -45,20 +46,24 @@ export class StreamParser {
     let exifFound = false;
     let c2paFound = false;
 
-    while (true) {
-      const { done, value } = await reader.read();
-      if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
-        await reader.cancel();
-        break;
-      }
-      chunks.push(value);
-      receivedLength += value.length;
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
+          await reader.cancel();
+          break;
+        }
+        chunks.push(value);
+        receivedLength += value.length;
 
-      const chunkStr = Array.from(value.slice(0, 100))
-        .map(b => b.toString(16).padStart(2, '0'))
-        .join('');
-      if (chunkStr.includes('ffe1')) exifFound = true;
-      if (chunkStr.includes('ffe2')) c2paFound = true;
+        const chunkStr = Array.from(value.slice(0, 100))
+          .map(b => b.toString(16).padStart(2, '0'))
+          .join('');
+        if (chunkStr.includes('ffe1')) exifFound = true;
+        if (chunkStr.includes('ffe2')) c2paFound = true;
+      }
+    } catch (error) {
+      console.warn('[FRP] Stream interrupted.');
     }
 
     const combinedBuffer = new Uint8Array(receivedLength);
@@ -68,7 +73,6 @@ export class StreamParser {
       position += chunk.length;
     }
 
-    // Generate the Cryptographic Fingerprint
     const hash = await this.generateHash(combinedBuffer);
 
     return {
