@@ -1,3 +1,5 @@
+import { EntropyRouter } from './entropy';
+
 export interface ForensicHeader {
   exifFound: boolean;
   c2paFound: boolean;
@@ -12,19 +14,26 @@ export class StreamParser {
 
   /**
    * Performs a partial stream fetch to extract headers without loading the full image into Edge memory.
+   * Now uses EntropyRouter to bypass CDN blocks (like Wikimedia).
    */
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
     console.log(`[FRP] Initiating Surgical Stream: ${imageUrl.substring(0, 50)}...`);
     
+    // Generate organic headers to bypass "Bot" detection
+    // We pass an empty string for the API key since this is a public image fetch
+    const organicHeaders = EntropyRouter.getHeaders("");
+    delete (organicHeaders as any)["Authorization"]; // Remove Auth for public images
+
     const response = await fetch(imageUrl, {
       headers: {
-        // Ask the server to only send the first 256KB if it supports range requests
+        ...organicHeaders,
         'Range': `bytes=0-${this.CHUNK_SIZE_LIMIT}`
       }
     });
     
-    if (!response.ok && response.status !== 206) { // 206 is Partial Content
-      throw new Error(`[FRP] Target rejected stream: ${response.statusText}`);
+    if (!response.ok && response.status !== 206) {
+      const errorText = await response.text();
+      throw new Error(`[FRP] Target rejected stream: ${errorText.substring(0, 100)}`);
     }
 
     const contentType = response.headers.get('content-type');
@@ -35,7 +44,7 @@ export class StreamParser {
     }
 
     const reader = response.body.getReader();
-    const chunks: Uint8Array[] =[];
+    const chunks: Uint8Array[] = [];
     let receivedLength = 0;
     let exifFound = false;
     let c2paFound = false;
@@ -45,18 +54,14 @@ export class StreamParser {
         const { done, value } = await reader.read();
 
         if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
-          // The "Violent Sever": Cancel the stream immediately to save memory
           await reader.cancel();
-          console.log(`[FRP] Stream severed at ${receivedLength} bytes.`);
           break;
         }
 
         chunks.push(value);
         receivedLength += value.length;
 
-        // Quick byte-pattern check for JPEG markers
-        // APP1 (Exif) is usually 0xFFE1
-        // C2PA (JUMBF) is usually 0xFFE2 or specific box headers
+        // Byte-pattern check for JPEG markers
         const chunkStr = Array.from(value.slice(0, 100))
           .map(b => b.toString(16).padStart(2, '0'))
           .join('');
@@ -68,7 +73,6 @@ export class StreamParser {
       console.warn('[FRP] Stream interrupted early, proceeding with extracted bytes.');
     }
 
-    // Combine chunks into a single Uint8Array for the Cryptographer model
     const combinedBuffer = new Uint8Array(receivedLength);
     let position = 0;
     for (const chunk of chunks) {
