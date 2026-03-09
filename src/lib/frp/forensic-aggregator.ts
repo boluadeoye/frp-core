@@ -22,8 +22,8 @@ export class ForensicAggregator {
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
-      // Switching to 20B for higher token allowance on Free Tier
-      const modelId = "openai/gpt-oss-20b";
+      // Switching to 70B Versatile - Better instruction following than 20B
+      const modelId = "llama-3.3-70b-versatile";
       const base64Header = this.toBase64Safe(headerBuffer);
       console.log(`[AGGREGATOR] Payload: ${base64Header.length} chars (~${Math.round(base64Header.length/4)} tokens).`);
 
@@ -32,11 +32,20 @@ export class ForensicAggregator {
         messages:[
           {
             role: "system",
-            content: "You are a Forensic Auditor. Analyze the provided Base64 image header for 'Adobe', 'Photoshop', or 'Canva' strings. If found, flag as edited. Return ONLY JSON: {\"confidence_score\": 0.0-1.0, \"analysis\": \"string\"}"
+            content: "You are a Forensic Auditor. Your task is to inspect the provided Base64 image header for strings like 'Adobe', 'Photoshop', 'Canva', or 'GIMP'. If these are found, it indicates the image has been edited. You must respond ONLY with a JSON object. No preamble, no explanation."
           },
           {
             role: "user",
-            content: `Header Bytes: ${base64Header}`
+            content: `Analyze the following image header data:
+<header_data>
+${base64Header}
+</header_data>
+
+Return JSON format:
+{
+  "confidence_score": 0.0 to 1.0,
+  "analysis": "detailed forensic findings"
+}`
           }
         ],
         temperature: 0.1,
@@ -56,13 +65,15 @@ export class ForensicAggregator {
 
       const data = await response.json();
       const resultText = data.choices[0].message.content;
+      
+      // Robust parsing
       const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
       const analysis = JSON.parse(cleanedText);
 
       await db.update(auditLedger)
         .set({
           status: "verified",
-          fcsScore: analysis.confidence_score.toString(),
+          fcsScore: (analysis.confidence_score || 0).toString(),
           forensicManifest: { visual: analysis.analysis, model: modelId },
           completedAt: new Date()
         })
