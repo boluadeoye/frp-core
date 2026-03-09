@@ -1,0 +1,18 @@
+# Forensic Reality Protocol (FRP)
+> The Truth Oracle for the Agentic Web and DePIN.
+
+## Overview
+FRP is a headless infrastructure protocol providing Physical State Verification. It uses Llama 4 Scout (Vision) and Cryptographic Hardware Anchoring (C2PA) to verify real-world claims for AI Agents.
+
+## Core Capabilities
+- **FCS (Forensic Confidence Score):** A deterministic 0.0-1.0 score of physical reality.
+- **C2PA Verification:** Validates hardware-level digital signatures.
+- **Spatial-Temporal Audit:** Cross-references sun-positioning with image shadows.
+- **Machine Tax:** $0.10 USDC per audit via asynchronous webhooks.
+
+## API Endpoints
+- `POST /api/v1/verify`: Submit image URL and metadata for forensic audit.
+- `GET /api/v1/status/[traceId]`: Retrieve audit manifest and FCS.
+
+## Developer
+Architect: Bolu Adeoye (Global Forensic Consulting Background, Deloitte).
