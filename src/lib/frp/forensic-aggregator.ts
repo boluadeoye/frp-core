@@ -6,10 +6,17 @@ import { EntropyRouter } from "./entropy";
 
 export class ForensicAggregator {
   /**
-   * Converts a Uint8Array to a Base64 string (Edge-compatible)
+   * Memory-Safe Base64 Encoder for Vercel Edge.
+   * Processes the buffer in 32KB chunks to prevent "Maximum call stack size exceeded".
    */
-  private static toBase64(buffer: Uint8Array): string {
-    return btoa(String.fromCharCode(...buffer));
+  private static toBase64Safe(buffer: Uint8Array): string {
+    let binary = '';
+    const chunkSize = 32768; // 32KB chunks
+    for (let i = 0; i < buffer.length; i += chunkSize) {
+      const chunk = buffer.subarray(i, i + chunkSize);
+      binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
+    }
+    return btoa(binary);
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array) {
@@ -19,15 +26,17 @@ export class ForensicAggregator {
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
-      // We use the 120B model for high-reasoning forensic logic
       const modelId = "openai/gpt-oss-120b";
       
-      // Convert the forensic bytes to Base64 for the AI to "inspect"
-      const base64Header = this.toBase64(headerBuffer);
+      // 1. Safe Base64 Encoding
+      console.log(`[AGGREGATOR] Encoding ${headerBuffer.length} bytes...`);
+      const base64Header = this.toBase64Safe(headerBuffer);
+      console.log(`[AGGREGATOR] Encoding complete. Payload size: ${base64Header.length} chars.`);
 
+      // 2. The 120B Forensic Prompt
       const payload = {
         model: modelId,
-        messages: [
+        messages:[
           {
             role: "system",
             content: `You are a Deloitte Forensic Auditor. You are inspecting the BINARY HEADER of an image.
@@ -45,6 +54,8 @@ export class ForensicAggregator {
         response_format: { type: "json_object" }
       };
 
+      // 3. Execute the 120B Audit
+      console.log(`[AGGREGATOR] Dispatching to ${modelId} via Key: ${key.id.substring(0,8)}`);
       const response = await fetch("https://api.groq.com/openai/v1/chat/completions", {
         method: "POST",
         headers: EntropyRouter.getHeaders(key.keyValue),
@@ -53,12 +64,16 @@ export class ForensicAggregator {
 
       if (!response.ok) {
         const errText = await response.text();
-        throw new Error(`GROQ_ERROR: ${response.status} - ${errText}`);
+        if (response.status === 429) await KeyManager.reportRateLimit(key.id);
+        throw new Error(`GROQ_ERROR: ${response.status} - ${errText.substring(0, 100)}`);
       }
 
       const data = await response.json();
-      const analysis = JSON.parse(data.choices[0].message.content);
+      const resultText = data.choices[0].message.content;
+      const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const analysis = JSON.parse(cleanedText);
 
+      // 4. Update Ledger
       await db.update(auditLedger)
         .set({
           status: "verified",
