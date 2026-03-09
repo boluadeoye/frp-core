@@ -1,9 +1,11 @@
 import { NextResponse } from 'next/server';
+import { after } from 'next/server';
 import { StreamParser } from '@/lib/frp/stream-parser';
 import { db } from '@/db';
 import { auditLedger } from '@/db/schema';
+import { ForensicAggregator } from '@/lib/frp/forensic-aggregator';
 
-export const runtime = 'edge'; // Force Vercel Edge Runtime
+export const runtime = 'edge';
 
 export async function POST(req: Request) {
   try {
@@ -17,11 +19,10 @@ export async function POST(req: Request) {
     const traceId = crypto.randomUUID();
     console.log(`[FRP] Audit Started: ${traceId} for Agent: ${agentId}`);
 
-    // 1. Immediate Surgical Header Extraction (Low Memory)
-    // We await this because it's fast (< 500ms) and we want to return preliminary data
+    // 1. Immediate Surgical Header Extraction
     const headerData = await StreamParser.extractHeaders(imageUrl);
 
-    // 2. Log the initial request to the "Machine Money" Ledger
+    // 2. Log the initial request to the Ledger
     await db.insert(auditLedger).values({
       agentId,
       requestId: traceId,
@@ -37,10 +38,10 @@ export async function POST(req: Request) {
       }
     });
 
-    // 3. Trigger the Background Forensic Audit (Fire and Forget)
-    // In a full implementation, this would trigger a background worker or queue.
-    // For now, we log the handoff.
-    console.log(`[FRP] Handoff to Llama 4 Scout pending for Trace: ${traceId}`);
+    // 3. Trigger the Background Forensic Audit using Next.js 15 `after()`
+    after(() => {
+      ForensicAggregator.processAudit(traceId, imageUrl, callbackUrl);
+    });
 
     // Return 202 Accepted immediately
     return NextResponse.json({
@@ -51,7 +52,7 @@ export async function POST(req: Request) {
         c2paDetected: headerData.c2paFound,
         contentType: headerData.contentType
       },
-      message: 'Forensic audit is processing asynchronously. Results will be available via GET /api/v1/status/[traceId]'
+      message: 'Forensic audit is processing asynchronously. Results will be sent to callbackUrl.'
     }, { status: 202 });
 
   } catch (error: any) {
