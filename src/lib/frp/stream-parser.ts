@@ -9,11 +9,11 @@ export interface ForensicHeader {
 }
 
 export class StreamParser {
-  // Reduced to 16KB. Sufficient for EXIF/C2PA headers and token-safe for AI.
-  private static readonly CHUNK_SIZE_LIMIT = 16 * 1024; 
+  // Reduced to 8KB for absolute safety on Free Tier token limits.
+  private static readonly CHUNK_SIZE_LIMIT = 8 * 1024; 
 
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
-    console.log(`[FRP] Initiating 16KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
+    console.log(`[FRP] Initiating 8KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
     
     const organicHeaders = EntropyRouter.getHeaders("");
     delete (organicHeaders as any)["Authorization"];

@@ -7,7 +7,7 @@ import { EntropyRouter } from "./entropy";
 export class ForensicAggregator {
   private static toBase64Safe(buffer: Uint8Array): string {
     let binary = '';
-    const chunkSize = 8192; 
+    const chunkSize = 4096; 
     for (let i = 0; i < buffer.length; i += chunkSize) {
       const chunk = buffer.subarray(i, i + chunkSize);
       binary += String.fromCharCode.apply(null, chunk as unknown as number[]);
@@ -16,13 +16,14 @@ export class ForensicAggregator {
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array) {
-    console.log(`[AGGREGATOR] Starting 16KB Audit: ${traceId}`);
+    console.log(`[AGGREGATOR] Starting 8KB Audit: ${traceId}`);
 
     try {
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
-      const modelId = "openai/gpt-oss-120b";
+      // Switching to 20B for higher token allowance on Free Tier
+      const modelId = "openai/gpt-oss-20b";
       const base64Header = this.toBase64Safe(headerBuffer);
       console.log(`[AGGREGATOR] Payload: ${base64Header.length} chars (~${Math.round(base64Header.length/4)} tokens).`);
 
@@ -31,7 +32,7 @@ export class ForensicAggregator {
         messages:[
           {
             role: "system",
-            content: "You are a Deloitte Forensic Auditor. Analyze the provided Base64 image header for 'Adobe', 'Photoshop', or 'Canva' strings. If found, flag as edited. Return ONLY JSON: {\"confidence_score\": 0.0-1.0, \"analysis\": \"string\"}"
+            content: "You are a Forensic Auditor. Analyze the provided Base64 image header for 'Adobe', 'Photoshop', or 'Canva' strings. If found, flag as edited. Return ONLY JSON: {\"confidence_score\": 0.0-1.0, \"analysis\": \"string\"}"
           },
           {
             role: "user",
@@ -54,7 +55,9 @@ export class ForensicAggregator {
       }
 
       const data = await response.json();
-      const analysis = JSON.parse(data.choices[0].message.content);
+      const resultText = data.choices[0].message.content;
+      const cleanedText = resultText.replace(/```json/g, '').replace(/```/g, '').trim();
+      const analysis = JSON.parse(cleanedText);
 
       await db.update(auditLedger)
         .set({
