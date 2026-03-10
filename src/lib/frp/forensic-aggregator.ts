@@ -19,13 +19,12 @@ export class ForensicAggregator {
 
   private static extractPhysicalContext(buffer: Uint8Array) {
     try {
-      // Cast to any to bypass strict Buffer/Uint8Array clashing in Edge
       const metadata = exif(Buffer.from(buffer) as any);
       const gps = metadata.gps;
       const exifData = metadata.exif;
 
       if (!gps || !gps.GPSLatitude || !gps.GPSLongitude) {
-        return { error: "No GPS metadata found." };
+        return { error: "GPS_MISSING" };
       }
 
       const lat = gps.GPSLatitude[0] + gps.GPSLatitude[1]/60 + gps.GPSLatitude[2]/3600;
@@ -35,8 +34,8 @@ export class ForensicAggregator {
       const sunPos = SunCalc.getPosition(new Date(timestamp), lat, lon);
 
       return {
-        lat,
-        lon,
+        lat: lat.toFixed(4),
+        lon: lon.toFixed(4),
         timestamp,
         sunAzimuth: (sunPos.azimuth * 180 / Math.PI).toFixed(2),
         sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
@@ -49,7 +48,7 @@ export class ForensicAggregator {
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string) {
-    console.log(`[AGGREGATOR] Physics Audit Started: ${traceId}`);
+    console.log(`[AGGREGATOR] Deep Audit Started: ${traceId}`);
 
     try {
       const burned = await db.query.burnRegistry.findFirst({
@@ -78,9 +77,12 @@ export class ForensicAggregator {
         messages:[
           {
             role: "system",
-            content: `You are a Forensic Physics Auditor. Analyze the image header and solar position.
-            Solar Context: Altitude ${physics.sunAltitude}°, Azimuth ${physics.sunAzimuth}°.
-            EXIF Context: ISO ${physics.iso}, Exposure ${physics.exposureTime}.
+            content: `You are a Forensic Auditor. Analyze the image header and physics context.
+            Physics: ${JSON.stringify(physics)}
+            Task: 
+            1. If GPS is present, verify if ISO/Exposure match the sun altitude.
+            2. Inspect binary for 'Adobe', 'Photoshop', 'Canva'.
+            3. If GPS is missing, perform binary-only audit.
             Return ONLY JSON: {"confidence_score": 0.0-1.0, "analysis": "string"}`
           },
           {
@@ -101,7 +103,8 @@ export class ForensicAggregator {
       if (!response.ok) throw new Error(`GROQ_ERROR: ${response.status}`);
 
       const data = await response.json();
-      const analysis = JSON.parse(data.choices[0].message.content);
+      const resultText = data.choices[0].message.content;
+      const analysis = JSON.parse(resultText);
 
       await db.update(auditLedger)
         .set({

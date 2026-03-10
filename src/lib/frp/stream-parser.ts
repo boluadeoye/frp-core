@@ -4,17 +4,14 @@ export interface ForensicHeader {
   exifFound: boolean;
   c2paFound: boolean;
   buffer: Uint8Array;
-  hash: string; // SHA-256 Fingerprint
+  hash: string;
   contentType: string | null;
 }
 
 export class StreamParser {
-  private static readonly CHUNK_SIZE_LIMIT = 8 * 1024; 
+  // Increased to 32KB to ensure full EXIF/GPS tag capture
+  private static readonly CHUNK_SIZE_LIMIT = 32 * 1024; 
 
-  /**
-   * Generates a SHA-256 hash of the buffer for the Burn Registry.
-   * Casts to 'any' to bypass Next.js 16 / SharedArrayBuffer type strictness.
-   */
   private static async generateHash(buffer: Uint8Array): Promise<string> {
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer as any);
     const hashArray = Array.from(new Uint8Array(hashBuffer));
@@ -22,7 +19,7 @@ export class StreamParser {
   }
 
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
-    console.log(`[FRP] Initiating 8KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
+    console.log(`[FRP] Initiating 32KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
     
     const organicHeaders = EntropyRouter.getHeaders("");
     delete (organicHeaders as any)["Authorization"];
