@@ -4,12 +4,9 @@ import { eq } from "drizzle-orm";
 import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
 import * as SunCalc from "suncalc";
-import exif from "exif-reader";
+import exifr from "exifr";
 
 export class ForensicAggregator {
-  /**
-   * Memory-safe Base64 encoder.
-   */
   private static toBase64Safe(buffer: Uint8Array): string {
     let binary = '';
     const chunkSize = 4096; 
@@ -20,20 +17,23 @@ export class ForensicAggregator {
     return btoa(binary);
   }
 
-  private static extractPhysicalContext(buffer: Uint8Array) {
+  private static async extractPhysicalContext(buffer: Uint8Array) {
     try {
-      // exif-reader uses the full 32KB buffer here
-      const metadata = exif(Buffer.from(buffer) as any);
-      const gps = metadata.gps;
-      const exifData = metadata.exif;
+      // exifr.parse is Edge-native and handles Uint8Array perfectly
+      const metadata = await exifr.parse(buffer, {
+        gps: true,
+        exif: true,
+        pick: ['GPSLatitude', 'GPSLongitude', 'DateTimeOriginal', 'ISO', 'ExposureTime']
+      });
 
-      if (!gps || !gps.GPSLatitude || !gps.GPSLongitude) {
-        return { error: "GPS_MISSING" };
+      if (!metadata || !metadata.GPSLatitude || !metadata.GPSLongitude) {
+        return { error: "GPS_MISSING_IN_HEADER" };
       }
 
-      const lat = gps.GPSLatitude[0] + gps.GPSLatitude[1]/60 + gps.GPSLatitude[2]/3600;
-      const lon = gps.GPSLongitude[0] + gps.GPSLongitude[1]/60 + gps.GPSLongitude[2]/3600;
-      const timestamp = exifData.DateTimeOriginal || new Date();
+      // exifr returns decimal coordinates automatically
+      const lat = metadata.GPSLatitude;
+      const lon = metadata.GPSLongitude;
+      const timestamp = metadata.DateTimeOriginal || new Date();
 
       const sunPos = SunCalc.getPosition(new Date(timestamp), lat, lon);
 
@@ -43,16 +43,16 @@ export class ForensicAggregator {
         timestamp,
         sunAzimuth: (sunPos.azimuth * 180 / Math.PI).toFixed(2),
         sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
-        iso: exifData.ISO,
-        exposureTime: exifData.ExposureTime
+        iso: metadata.ISO,
+        exposureTime: metadata.ExposureTime
       };
-    } catch (e) {
-      return { error: "EXIF_PARSE_FAILED" };
+    } catch (e: any) {
+      return { error: `PARSE_FAILED: ${e.message}` };
     }
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string) {
-    console.log(`[AGGREGATOR] Starting Hybrid Audit: ${traceId}`);
+    console.log(`[AGGREGATOR] Edge-Native Audit Started: ${traceId}`);
 
     try {
       const burned = await db.query.burnRegistry.findFirst({
@@ -69,19 +69,15 @@ export class ForensicAggregator {
         return;
       }
 
-      // 1. Extract Physics using the FULL 32KB buffer
-      const physics = this.extractPhysicalContext(headerBuffer);
+      // 1. Extract Physics (Async exifr)
+      const physics = await this.extractPhysicalContext(headerBuffer);
       
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
       const modelId = "llama-3.3-70b-versatile";
-      
-      // 2. SURGICAL SLIVER: Only send the first 4KB to the AI to avoid 413 error
       const aiBuffer = headerBuffer.slice(0, 4096);
       const base64Sliver = this.toBase64Safe(aiBuffer);
-      
-      console.log(`[AGGREGATOR] Physics Extracted. Sending 4KB sliver to AI.`);
 
       const payload = {
         model: modelId,
@@ -110,10 +106,7 @@ export class ForensicAggregator {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) {
-        const errText = await response.text();
-        throw new Error(`GROQ_ERROR: ${response.status} - ${errText.substring(0, 100)}`);
-      }
+      if (!response.ok) throw new Error(`GROQ_ERROR: ${response.status}`);
 
       const data = await response.json();
       const analysis = JSON.parse(data.choices[0].message.content);

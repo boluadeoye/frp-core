@@ -9,8 +9,8 @@ export interface ForensicHeader {
 }
 
 export class StreamParser {
-  // Increased to 32KB to ensure full EXIF/GPS tag capture
-  private static readonly CHUNK_SIZE_LIMIT = 32 * 1024; 
+  // Increased to 64KB for absolute reliability with exifr
+  private static readonly CHUNK_SIZE_LIMIT = 64 * 1024; 
 
   private static async generateHash(buffer: Uint8Array): Promise<string> {
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer as any);
@@ -19,7 +19,7 @@ export class StreamParser {
   }
 
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
-    console.log(`[FRP] Initiating 32KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
+    console.log(`[FRP] Initiating 64KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
     
     const organicHeaders = EntropyRouter.getHeaders("");
     delete (organicHeaders as any)["Authorization"];
