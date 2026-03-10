@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
 import * as SunCalc from "suncalc";
-import exifr from "exifr"; // Using the full Node.js version now
+import exifr from "exifr/dist/lite.esm.js"; // Edge/Bundle safe version
 
 export class ForensicAggregator {
   private static toBase64Safe(buffer: Uint8Array): string {
@@ -19,7 +19,6 @@ export class ForensicAggregator {
 
   private static async extractPhysicalContext(buffer: Uint8Array) {
     try {
-      // In Node.js, exifr can parse the Uint8Array directly without polyfill errors
       const metadata = await exifr.parse(buffer, {
         gps: true,
         exif: true,
@@ -68,7 +67,6 @@ export class ForensicAggregator {
         return;
       }
 
-      // 1. Extract Physics (Node.js Environment)
       const physics = await this.extractPhysicalContext(headerBuffer);
       console.log(`[AGGREGATOR] Physics Data:`, physics);
       
@@ -76,8 +74,6 @@ export class ForensicAggregator {
       if (!key) throw new Error("POOL_EMPTY");
 
       const modelId = "llama-3.3-70b-versatile";
-      
-      // 2. Send only a 4KB sliver to Groq to prevent 413 Token Error
       const aiBuffer = headerBuffer.slice(0, 4096);
       const base64Sliver = this.toBase64Safe(aiBuffer);
 

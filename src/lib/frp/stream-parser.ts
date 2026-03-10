@@ -9,7 +9,6 @@ export interface ForensicHeader {
 }
 
 export class StreamParser {
-  // 64KB ensures we capture the full EXIF directory for the Node.js parser
   private static readonly CHUNK_SIZE_LIMIT = 64 * 1024; 
 
   private static async generateHash(buffer: Uint8Array): Promise<string> {
@@ -19,11 +18,12 @@ export class StreamParser {
   }
 
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
-    console.log(`[FRP] Initiating 64KB Surgical Stream: ${imageUrl.substring(0, 50)}...`);
+    console.log(`[FRP] Initiating 64KB Clean Fetch: ${imageUrl.substring(0, 50)}...`);
     
     const organicHeaders = EntropyRouter.getHeaders("");
     delete (organicHeaders as any)["Authorization"];
 
+    // We rely on the Range header to limit the payload size
     const response = await fetch(imageUrl, {
       headers: {
         ...organicHeaders,
@@ -35,40 +35,16 @@ export class StreamParser {
       throw new Error(`[FRP] Target rejected stream: ${response.status}`);
     }
 
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("[FRP] No stream body");
+    // Node.js safe buffer extraction (No hanging stream readers)
+    const arrayBuffer = await response.arrayBuffer();
+    const combinedBuffer = new Uint8Array(arrayBuffer);
 
-    const chunks: Uint8Array[] =[];
-    let receivedLength = 0;
-    let exifFound = false;
-    let c2paFound = false;
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
-          await reader.cancel();
-          break;
-        }
-        chunks.push(value);
-        receivedLength += value.length;
-
-        const chunkStr = Array.from(value.slice(0, 100))
-          .map(b => b.toString(16).padStart(2, '0'))
-          .join('');
-        if (chunkStr.includes('ffe1')) exifFound = true;
-        if (chunkStr.includes('ffe2')) c2paFound = true;
-      }
-    } catch (error) {
-      console.warn('[FRP] Stream interrupted.');
-    }
-
-    const combinedBuffer = new Uint8Array(receivedLength);
-    let position = 0;
-    for (const chunk of chunks) {
-      combinedBuffer.set(chunk, position);
-      position += chunk.length;
-    }
+    // Quick byte-pattern check
+    const chunkStr = Array.from(combinedBuffer.slice(0, 100))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    const exifFound = chunkStr.includes('ffe1');
+    const c2paFound = chunkStr.includes('ffe2');
 
     const hash = await this.generateHash(combinedBuffer);
 
