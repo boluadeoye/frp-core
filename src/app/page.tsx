@@ -1,47 +1,41 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Crosshair, Activity, AlertTriangle, Terminal, Database, Globe, Cpu } from "lucide-react";
+import { Shield, Crosshair, Activity, AlertTriangle, Terminal, Database, Globe, Cpu, ChevronRight } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 
-// --- THE BLAZING LOGO COMPONENT ---
+// --- REFINED BLAZING LOGO ---
 const BlazingLogo = () => (
-  <motion.div
-    initial={{ boxShadow: "0px 0px 5px rgba(16, 185, 129, 0.2)" }}
-    animate={{ boxShadow:["0px 0px 5px rgba(16, 185, 129, 0.2)", "0px 0px 25px rgba(16, 185, 129, 0.8)", "0px 0px 5px rgba(16, 185, 129, 0.2)"] }}
-    transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
-    className="relative flex items-center justify-center w-14 h-14 bg-black border border-emerald-500/50 rounded-xl overflow-hidden"
-  >
-    <motion.span 
-      className="text-emerald-400 font-black text-3xl font-mono tracking-tighter z-10"
-      style={{ textShadow: "0 0 10px rgba(16,185,129,0.8)" }}
-    >
-      F
-    </motion.span>
-    <div className="absolute inset-0 bg-gradient-to-br from-emerald-900/40 to-transparent z-0" />
-    {/* Scanning line effect */}
-    <motion.div 
-      animate={{ top: ["-10%", "110%"] }}
-      transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-      className="absolute left-0 right-0 h-[1px] bg-emerald-400/50 z-20 shadow-[0_0_5px_rgba(16,185,129,1)]"
+  <div className="relative flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-b from-emerald-900/20 to-black border border-emerald-500/20 overflow-hidden group">
+    <motion.div
+      animate={{ opacity:[0.4, 0.8, 0.4] }}
+      transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
+      className="absolute inset-0 bg-emerald-500/10 blur-md"
     />
-  </motion.div>
+    <span className="text-emerald-400 font-black text-2xl font-sans tracking-tighter z-10 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]">
+      F
+    </span>
+    <motion.div 
+      animate={{ top:["-20%", "120%"] }}
+      transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
+      className="absolute left-0 right-0 h-[1px] bg-emerald-400/30 z-20"
+    />
+  </div>
 );
 
 export default function CommandDeck() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [error, setError] = useState("");
+  const[error, setError] = useState("");
   const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
 
-  // Form State
   const [imageUrl, setImageUrl] = useState("");
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [timestamp, setTimestamp] = useState("");
   const [iso, setIso] = useState("");
-  const[exposure, setExposure] = useState("");
+  const [exposure, setExposure] = useState("");
 
   const loadTestVector = () => {
     setImageUrl("https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN0010.jpg");
@@ -54,7 +48,7 @@ export default function CommandDeck() {
   };
 
   const addLog = (msg: string) => {
-    setTerminalLogs(prev => [...prev, `[${new Date().toISOString().split('T')[1].slice(0,-1)}] ${msg}`]);
+    setTerminalLogs(prev =>[...prev, `[${new Date().toISOString().split('T')[1].slice(0,-1)}] ${msg}`]);
   };
 
   const executeAudit = async (e: React.FormEvent) => {
@@ -113,26 +107,31 @@ export default function CommandDeck() {
   };
 
   return (
-    <main className="min-h-screen bg-[#050505] text-gray-300 p-4 md:p-8 font-sans selection:bg-emerald-900">
-      <div className="max-w-6xl mx-auto space-y-8">
+    <main className="min-h-screen bg-[#020202] text-gray-300 p-4 md:p-8 font-sans selection:bg-emerald-900/50 relative overflow-hidden">
+      
+      {/* Ambient Background Glow */}
+      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-900/10 blur-[120px] rounded-full pointer-events-none" />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/10 blur-[120px] rounded-full pointer-events-none" />
+
+      <div className="max-w-6xl mx-auto space-y-10 relative z-10">
         
-        {/* PREMIUM HEADER */}
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 border-b border-white/10 pb-6">
-          <div className="flex items-center gap-4">
+        {/* HEADER */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pt-4">
+          <div className="flex items-center gap-5">
             <BlazingLogo />
             <div>
-              <h1 className="text-3xl font-black text-white tracking-tighter uppercase">Forensic Reality Protocol</h1>
-              <p className="text-sm text-emerald-500/80 font-mono tracking-widest uppercase mt-1">Sovereign Truth Infrastructure</p>
+              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Forensic Reality Protocol</h1>
+              <p className="text-xs text-emerald-500/70 font-mono tracking-widest uppercase mt-1">Sovereign Truth Infrastructure</p>
             </div>
           </div>
-          <div className="flex gap-4 text-xs font-mono text-gray-500">
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md border border-white/5">
-              <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-              SYSTEM ONLINE
+          <div className="flex gap-3 text-[10px] font-mono text-gray-500 uppercase tracking-wider">
+            <div className="flex items-center gap-2 bg-white/[0.02] px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-sm">
+              <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
+              System Online
             </div>
-            <div className="flex items-center gap-2 bg-white/5 px-3 py-1.5 rounded-md border border-white/5">
+            <div className="flex items-center gap-2 bg-white/[0.02] px-3 py-1.5 rounded-full border border-white/5 backdrop-blur-sm">
               <Globe className="w-3 h-3" />
-              GLOBAL EDGE
+              Global Edge
             </div>
           </div>
         </header>
@@ -140,86 +139,85 @@ export default function CommandDeck() {
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
           {/* LEFT COLUMN: INGESTION FORM */}
-          <div className="lg:col-span-7 space-y-6">
-            <div className="bg-[#0a0a0a] border border-white/10 rounded-2xl p-6 shadow-2xl relative overflow-hidden">
-              {/* Subtle background glow */}
-              <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-32 bg-emerald-500/5 blur-[100px] pointer-events-none" />
+          <div className="lg:col-span-7">
+            <div className="bg-white/[0.01] border border-white/5 rounded-3xl p-6 md:p-8 backdrop-blur-2xl shadow-2xl">
               
-              <div className="flex justify-between items-center mb-6 relative z-10">
-                <h2 className="text-xl font-bold text-white flex items-center gap-2">
-                  <Crosshair className="w-5 h-5 text-emerald-500" /> Target Acquisition
+              <div className="flex justify-between items-center mb-8">
+                <h2 className="text-lg font-medium text-white flex items-center gap-2">
+                  <Crosshair className="w-4 h-4 text-emerald-500" /> Target Acquisition
                 </h2>
                 <button 
                   type="button" 
                   onClick={loadTestVector}
-                  className="text-xs font-mono bg-white/5 hover:bg-white/10 text-gray-300 px-4 py-2 rounded-lg border border-white/10 transition-all"
+                  className="text-[10px] font-mono text-gray-400 hover:text-emerald-400 transition-colors flex items-center gap-1"
                 >
-                  [ LOAD TEST VECTOR ]
+                  LOAD TEST VECTOR <ChevronRight className="w-3 h-3" />
                 </button>
               </div>
 
               {error && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 bg-red-500/10 border border-red-500/30 text-red-400 p-4 rounded-lg text-sm flex items-start gap-3 font-mono">
-                  <AlertTriangle className="w-5 h-5 shrink-0 mt-0.5" /> 
+                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 bg-red-500/5 border border-red-500/20 text-red-400 p-4 rounded-xl text-xs flex items-start gap-3 font-mono">
+                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> 
                   <p>{error}</p>
                 </motion.div>
               )}
 
-              <form onSubmit={executeAudit} className="space-y-5 relative z-10">
-                <div className="space-y-1">
-                  <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Target Image URL</label>
+              <form onSubmit={executeAudit} className="space-y-6">
+                {/* Input Group Component */}
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Target Image URL</label>
                   <input 
                     type="url" required
                     value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all outline-none font-mono"
+                    className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono placeholder:text-gray-700"
                     placeholder="https://..."
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="space-y-1">
-                    <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Latitude</label>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Latitude</label>
                     <input 
                       type="number" step="any" required
                       value={lat} onChange={(e) => setLat(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all outline-none font-mono"
+                      className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Longitude</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Longitude</label>
                     <input 
                       type="number" step="any" required
                       value={lon} onChange={(e) => setLon(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all outline-none font-mono"
+                      className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono"
                     />
                   </div>
                 </div>
 
-                <div className="space-y-1">
-                  <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Timestamp (ISO 8601)</label>
+                <div className="space-y-1.5">
+                  <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Timestamp (ISO 8601)</label>
                   <input 
                     type="text" required
                     value={timestamp} onChange={(e) => setTimestamp(e.target.value)}
-                    className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all outline-none font-mono"
+                    className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono placeholder:text-gray-700"
                     placeholder="YYYY-MM-DDTHH:mm:ssZ"
                   />
                 </div>
 
-                <div className="grid grid-cols-2 gap-5">
-                  <div className="space-y-1">
-                    <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Camera ISO</label>
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Camera ISO</label>
                     <input 
                       type="number" required
                       value={iso} onChange={(e) => setIso(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all outline-none font-mono"
+                      className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono"
                     />
                   </div>
-                  <div className="space-y-1">
-                    <label className="text-xs font-mono text-gray-500 uppercase tracking-wider">Exposure Time</label>
+                  <div className="space-y-1.5">
+                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Exposure Time</label>
                     <input 
                       type="text" required
                       value={exposure} onChange={(e) => setExposure(e.target.value)}
-                      className="w-full bg-black/50 border border-white/10 rounded-lg p-3 text-sm text-white focus:border-emerald-500/50 focus:ring-1 focus:ring-emerald-500/50 transition-all outline-none font-mono"
+                      className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono placeholder:text-gray-700"
                       placeholder="1/500"
                     />
                   </div>
@@ -228,10 +226,10 @@ export default function CommandDeck() {
                 <button 
                   type="submit" 
                   disabled={loading}
-                  className="w-full mt-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold py-4 rounded-lg transition-all flex justify-center items-center gap-3 disabled:opacity-50 disabled:cursor-not-allowed shadow-[0_0_20px_rgba(16,185,129,0.3)] hover:shadow-[0_0_30px_rgba(16,185,129,0.5)]"
+                  className="w-full mt-8 bg-white text-black hover:bg-gray-200 font-medium py-4 rounded-xl transition-all flex justify-center items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
                 >
-                  {loading ? <Activity className="w-5 h-5 animate-spin" /> : <Shield className="w-5 h-5" />}
-                  {loading ? "EXECUTING CRYPTOGRAPHIC AUDIT..." : "INITIALIZE AUDIT"}
+                  {loading ? <Activity className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
+                  {loading ? "EXECUTING AUDIT..." : "INITIALIZE AUDIT"}
                 </button>
               </form>
             </div>
@@ -241,12 +239,13 @@ export default function CommandDeck() {
           <div className="lg:col-span-5 space-y-6">
             
             {/* LIVE TERMINAL */}
-            <div className="bg-black border border-white/10 rounded-2xl p-5 shadow-2xl h-[300px] flex flex-col">
-              <div className="flex items-center gap-2 mb-4 border-b border-white/10 pb-3">
+            <div className="bg-black/60 border border-white/5 rounded-3xl p-6 backdrop-blur-xl h-[320px] flex flex-col relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
+              <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-4">
                 <Terminal className="w-4 h-4 text-gray-500" />
-                <h3 className="text-sm font-mono text-gray-400 uppercase tracking-widest">Execution Log</h3>
+                <h3 className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Execution Log</h3>
               </div>
-              <div className="flex-1 overflow-y-auto font-mono text-xs space-y-2 text-emerald-500/80">
+              <div className="flex-1 overflow-y-auto font-mono text-[11px] space-y-2 text-emerald-400/70 leading-relaxed">
                 {terminalLogs.length === 0 ? (
                   <p className="text-gray-600 italic">Awaiting target acquisition...</p>
                 ) : (
@@ -254,7 +253,7 @@ export default function CommandDeck() {
                     {terminalLogs.map((log, i) => (
                       <motion.div 
                         key={i}
-                        initial={{ opacity: 0, x: -10 }}
+                        initial={{ opacity: 0, x: -5 }}
                         animate={{ opacity: 1, x: 0 }}
                         className="break-all"
                       >
@@ -268,15 +267,15 @@ export default function CommandDeck() {
 
             {/* SYSTEM STATS BENTO */}
             <div className="grid grid-cols-2 gap-4">
-              <div className="bg-[#0a0a0a] border border-white/10 rounded-xl p-4">
-                <Database className="w-5 h-5 text-blue-500 mb-2" />
-                <p className="text-xs text-gray-500 font-mono uppercase">Ledger Status</p>
-                <p className="text-lg font-bold text-white mt-1">SYNCED</p>
+              <div className="bg-white/[0.01] border border-white/5 rounded-2xl p-5 backdrop-blur-sm">
+                <Database className="w-4 h-4 text-gray-400 mb-3" />
+                <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">Ledger Status</p>
+                <p className="text-sm font-medium text-white mt-1">SYNCED</p>
               </div>
-              <div className="bg-[#0a0a0a] border border-white/10 rounded-xl p-4">
-                <Cpu className="w-5 h-5 text-purple-500 mb-2" />
-                <p className="text-xs text-gray-500 font-mono uppercase">Oracle Engine</p>
-                <p className="text-lg font-bold text-white mt-1">70B LPU</p>
+              <div className="bg-white/[0.01] border border-white/5 rounded-2xl p-5 backdrop-blur-sm">
+                <Cpu className="w-4 h-4 text-gray-400 mb-3" />
+                <p className="text-[10px] text-gray-500 font-mono uppercase tracking-wider">Oracle Engine</p>
+                <p className="text-sm font-medium text-white mt-1">70B LPU</p>
               </div>
             </div>
 
