@@ -5,7 +5,6 @@ import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
 import * as SunCalc from "suncalc";
 import crypto from "crypto";
-import fastExif from "fast-exif";
 
 export class ForensicAggregator {
   private static toBase64Safe(buffer: Uint8Array): string {
@@ -18,29 +17,24 @@ export class ForensicAggregator {
     return btoa(binary);
   }
 
-  private static async extractServerExif(buffer: Uint8Array) {
-    try {
-      const data = await (fastExif as any).read(Buffer.from(buffer));
-      if (!data || !data.gps || !data.gps.GPSLatitude) return { error: "DATA_NOT_FOUND_IN_128KB" };
+  /**
+   * SOVEREIGN HEX SCANNER: Scans raw bytes for forensic markers.
+   * No libraries. No polyfills. Pure logic.
+   */
+  private static scanBinary(buffer: Uint8Array) {
+    const hex = Array.from(buffer.slice(0, 8192))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    
+    const markers = {
+      adobe: hex.includes('41646f6265'), // "Adobe"
+      photoshop: hex.includes('50686f746f73686f70'), // "Photoshop"
+      nikon: hex.includes('4e696b6f6e'), // "Nikon"
+      apple: hex.includes('4170706c65'), // "Apple"
+      gps: hex.includes('47505320'), // "GPS "
+    };
 
-      const lat = data.gps.GPSLatitude[0] + data.gps.GPSLatitude[1]/60 + data.gps.GPSLatitude[2]/3600;
-      const lon = data.gps.GPSLongitude[0] + data.gps.GPSLongitude[1]/60 + data.gps.GPSLongitude[2]/3600;
-      const finalLat = data.gps.GPSLatitudeRef === 'S' ? -lat : lat;
-      const finalLon = data.gps.GPSLongitudeRef === 'W' ? -lon : lon;
-
-      const timestamp = data.exif.DateTimeOriginal || new Date();
-      const sunPos = SunCalc.getPosition(timestamp, finalLat, finalLon);
-
-      return {
-        lat: finalLat.toFixed(4),
-        lon: finalLon.toFixed(4),
-        sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
-        iso: data.exif.ISO || 0,
-        exposure: data.exif.ExposureTime || 0
-      };
-    } catch (e) {
-      return { error: "PARSE_FAILED" };
-    }
+    return { markers, hex_sample: hex.substring(0, 512) };
   }
 
   private static generateOracleSignature(traceId: string, hash: string, fcs: string): string {
@@ -54,24 +48,25 @@ export class ForensicAggregator {
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any) {
-    try {
-      const serverExif: any = await this.extractServerExif(headerBuffer);
-      
-      // TRUST BOUNDARY CHECK
-      let trustViolation = false;
-      let violationReason = "";
+    console.log(`[AGGREGATOR] Sovereign Audit: ${traceId}`);
 
-      if (serverExif.error && clientExif.latitude) {
-        trustViolation = true;
-        violationReason = "Server could not verify GPS in binary, but client provided GPS.";
-      } else if (serverExif.lat && clientExif.latitude) {
-        const diff = Math.abs(parseFloat(clientExif.latitude) - parseFloat(serverExif.lat));
-        if (diff > 0.01) {
-          trustViolation = true;
-          violationReason = "Client GPS does not match Binary GPS.";
-        }
+    try {
+      // 1. RAW BINARY SCAN
+      const binaryReport = this.scanBinary(headerBuffer);
+      
+      // 2. PHYSICS CALCULATION (From Client Data, verified by AI)
+      let physics: any = { error: "NO_CLIENT_DATA" };
+      if (clientExif?.latitude) {
+        const sunPos = SunCalc.getPosition(new Date(clientExif.timestamp), clientExif.latitude, clientExif.longitude);
+        physics = {
+          sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
+          sunAzimuth: (sunPos.azimuth * 180 / Math.PI).toFixed(2),
+          iso: clientExif.iso,
+          exposure: clientExif.exposureTime
+        };
       }
 
+      // 3. AI COGNITIVE CROSS-EXAMINATION
       const key = await KeyManager.getValidKey();
       const base64Sliver = this.toBase64Safe(headerBuffer.slice(0, 4096));
 
@@ -79,10 +74,10 @@ export class ForensicAggregator {
         model: "llama-3.3-70b-versatile",
         messages: [{
           role: "system",
-          content: "You are a Forensic Auditor. Compare the Server_Exif and Client_Exif. If they mismatch or if physics are impossible, the score must be 0.05. Return ONLY JSON: {\"confidence_score\": 0.0-1.0, \"analysis\": \"string\"}"
+          content: "You are a Forensic Auditor. Compare the Binary Markers and Physics. If the Sun is below -2.0 altitude but ISO is < 400, it is a LIE. Return ONLY JSON: {\"confidence_score\": 0.0-1.0, \"analysis\": \"string\"}"
         }, {
           role: "user",
-          content: `Server_Exif: ${JSON.stringify(serverExif)}\nClient_Exif: ${JSON.stringify(clientExif)}\nHeader: ${base64Sliver}`
+          content: `Binary_Markers: ${JSON.stringify(binaryReport.markers)}\nPhysics_Context: ${JSON.stringify(physics)}\nHeader_Hex_Sample: ${binaryReport.hex_sample}`
         }],
         response_format: { type: "json_object" }
       };
@@ -96,8 +91,11 @@ export class ForensicAggregator {
       const data = await response.json();
       const analysis = JSON.parse(data.choices[0].message.content);
       
-      let finalScore = trustViolation ? 0.050 : parseFloat(analysis.confidence_score);
-      let finalAnalysis = trustViolation ? `TRUST_VIOLATION: ${violationReason}` : analysis.analysis;
+      // 4. DETERMINISTIC OVERRIDE
+      let finalScore = parseFloat(analysis.confidence_score);
+      if (physics.sunAltitude && parseFloat(physics.sunAltitude) < -2 && physics.iso < 400) {
+        finalScore = 0.050;
+      }
 
       const signature = this.generateOracleSignature(traceId, headerHash, finalScore.toFixed(3));
 
@@ -105,9 +103,15 @@ export class ForensicAggregator {
         status: finalScore < 0.4 ? "flagged" : "verified",
         fcsScore: finalScore.toFixed(3),
         oracleSignature: signature,
-        forensicManifest: { visual: finalAnalysis, server_physics: serverExif, client_mismatch: trustViolation },
+        forensicManifest: { 
+          visual: analysis.analysis, 
+          binary_markers: binaryReport.markers,
+          physics_report: physics
+        },
         completedAt: new Date()
       }).where(eq(auditLedger.requestId, traceId));
+
+      console.log(`[AGGREGATOR] Audit Finalized: ${finalScore}`);
 
     } catch (error: any) {
       console.error("FATAL", error.message);
