@@ -2,7 +2,7 @@ import { db } from "@/db";
 import { auditLedger } from "@/db/schema";
 import { eq, or } from "drizzle-orm";
 import { notFound } from "next/navigation";
-import { ShieldCheck, ShieldAlert, Cpu, Sun, Hash, Key } from "lucide-react";
+import { ShieldCheck, ShieldAlert, Cpu, Sun, Hash, Key, Globe } from "lucide-react";
 
 export const runtime = 'edge';
 
@@ -10,13 +10,12 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
   const resolvedParams = await params;
   const { traceId } = resolvedParams;
 
-  // Search by either the exact traceId OR the agentId for easier testing
   const audit = await db.query.auditLedger.findFirst({
     where: or(
       eq(auditLedger.requestId, traceId),
       eq(auditLedger.agentId, traceId)
     ),
-    orderBy: (auditLedger, { desc }) =>[desc(auditLedger.startedAt)],
+    orderBy: (auditLedger, { desc }) => [desc(auditLedger.startedAt)],
   });
 
   if (!audit) return notFound();
@@ -27,29 +26,41 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
   const physics = manifest?.physics_report;
 
   return (
-    <main className="min-h-screen bg-black text-gray-300 p-4 md:p-8 font-mono selection:bg-emerald-900">
-      <div className="max-w-4xl mx-auto space-y-8">
+    <main className="min-h-screen bg-[#020202] text-gray-300 p-4 md:p-8 font-sans selection:bg-emerald-900/50 relative overflow-hidden">
+      
+      {/* Ambient Background Glow based on Verdict */}
+      <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] blur-[120px] rounded-full pointer-events-none ${isVerified ? 'bg-emerald-900/10' : 'bg-red-900/10'}`} />
+      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/5 blur-[120px] rounded-full pointer-events-none" />
+
+      <div className="max-w-4xl mx-auto space-y-8 relative z-10">
         
-        {/* HEADER */}
-        <header className="border-b border-gray-800 pb-6 flex justify-between items-end">
+        {/* PREMIUM HEADER */}
+        <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/10 pb-6 pt-4">
           <div>
-            <h1 className="text-3xl font-bold text-white tracking-tighter">FRP // ORACLE</h1>
-            <p className="text-sm text-gray-500 mt-1">Cryptographic Attestation of Physical Reality</p>
+            <h1 className="text-3xl font-black text-white tracking-tighter uppercase">FRP // ORACLE</h1>
+            <p className="text-xs text-gray-500 font-mono tracking-widest uppercase mt-1">Cryptographic Attestation of Physical Reality</p>
           </div>
-          <div className="text-right">
-            <p className="text-xs text-gray-500">TRACE ID</p>
-            <p className="text-sm text-gray-400">{audit.requestId}</p>
+          <div className="text-left md:text-right">
+            <p className="text-[10px] text-gray-600 font-mono uppercase tracking-widest">Trace ID</p>
+            <p className="text-xs text-gray-400 font-mono bg-white/5 px-2 py-1 rounded mt-1 border border-white/5">{audit.requestId}</p>
           </div>
         </header>
 
-        {/* THE VERDICT */}
-        <section className={`p-6 rounded-lg border ${isVerified ? 'bg-emerald-950/20 border-emerald-900/50' : 'bg-red-950/20 border-red-900/50'} flex items-center gap-6`}>
-          {isVerified ? <ShieldCheck className="w-16 h-16 text-emerald-500" /> : <ShieldAlert className="w-16 h-16 text-red-500" />}
-          <div>
-            <h2 className={`text-2xl font-bold ${isVerified ? 'text-emerald-400' : 'text-red-400'}`}>
-              {isVerified ? "PHYSICAL REALITY VERIFIED" : "PHYSICAL LIE DETECTED"}
+        {/* THE VERDICT (HERO SECTION) */}
+        <section className={`p-8 rounded-3xl border backdrop-blur-xl flex flex-col md:flex-row items-center gap-8 ${isVerified ? 'bg-emerald-950/10 border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.05)]' : 'bg-red-950/10 border-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.05)]'}`}>
+          <div className={`p-4 rounded-full ${isVerified ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
+            {isVerified ? <ShieldCheck className="w-16 h-16 text-emerald-500" /> : <ShieldAlert className="w-16 h-16 text-red-500" />}
+          </div>
+          <div className="text-center md:text-left">
+            <h2 className={`text-3xl font-black tracking-tight uppercase ${isVerified ? 'text-emerald-400' : 'text-red-400'}`}>
+              {isVerified ? "Physical Reality Verified" : "Physical Lie Detected"}
             </h2>
-            <p className="text-gray-400 mt-1">Forensic Confidence Score (FCS): <span className="text-white font-bold">{fcsScore.toFixed(3)}</span></p>
+            <div className="mt-2 flex flex-col md:flex-row items-center gap-2 md:gap-4">
+              <p className="text-sm text-gray-400 font-mono uppercase tracking-wider">Forensic Confidence Score (FCS):</p>
+              <div className={`text-2xl font-bold font-mono px-4 py-1 rounded-lg border ${isVerified ? 'bg-emerald-500/10 border-emerald-500/30 text-emerald-300' : 'bg-red-500/10 border-red-500/30 text-red-300'}`}>
+                {fcsScore.toFixed(3)}
+              </div>
+            </div>
           </div>
         </section>
 
@@ -57,58 +68,77 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
           {/* PHYSICS ENGINE */}
-          <div className="border border-gray-800 rounded-lg p-5 bg-gray-900/30">
-            <div className="flex items-center gap-2 mb-4 border-b border-gray-800 pb-2">
+          <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
               <Sun className="w-5 h-5 text-amber-500" />
-              <h3 className="text-lg font-semibold text-white">Spatial-Temporal Physics</h3>
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest">Spatial-Temporal Physics</h3>
             </div>
             {physics && !physics.error ? (
-              <ul className="space-y-2 text-sm">
-                <li className="flex justify-between"><span className="text-gray-500">Claimed GPS:</span> <span>{physics.lat}, {physics.lon}</span></li>
-                <li className="flex justify-between"><span className="text-gray-500">Claimed Time:</span> <span>{new Date(physics.timestamp).toLocaleString()}</span></li>
-                <li className="flex justify-between"><span className="text-gray-500">Calculated Sun Altitude:</span> <span className={parseFloat(physics.sunAltitude) < 0 ? "text-red-400" : "text-emerald-400"}>{physics.sunAltitude}°</span></li>
-                <li className="flex justify-between"><span className="text-gray-500">Camera ISO:</span> <span>{physics.iso}</span></li>
-                <li className="flex justify-between"><span className="text-gray-500">Exposure Time:</span> <span>{physics.exposureTime}</span></li>
+              <ul className="space-y-4 text-sm font-mono">
+                <li className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <span className="text-gray-500 text-xs">CLAIMED GPS</span> 
+                  <span className="text-gray-300">{physics.lat}, {physics.lon}</span>
+                </li>
+                <li className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <span className="text-gray-500 text-xs">CLAIMED TIME</span> 
+                  <span className="text-gray-300">{new Date(physics.timestamp).toLocaleString()}</span>
+                </li>
+                <li className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <span className="text-gray-500 text-xs">SUN ALTITUDE</span> 
+                  <span className={`font-bold ${parseFloat(physics.sunAltitude) < 0 ? "text-red-400" : "text-emerald-400"}`}>{physics.sunAltitude}°</span>
+                </li>
+                <li className="flex justify-between items-center border-b border-white/5 pb-2">
+                  <span className="text-gray-500 text-xs">CAMERA ISO</span> 
+                  <span className="text-gray-300">{physics.iso}</span>
+                </li>
+                <li className="flex justify-between items-center">
+                  <span className="text-gray-500 text-xs">EXPOSURE TIME</span> 
+                  <span className="text-gray-300">{physics.exposureTime}</span>
+                </li>
               </ul>
             ) : (
-              <p className="text-sm text-red-400">Physics Data Missing or Corrupted</p>
+              <p className="text-xs font-mono text-red-400 bg-red-500/10 p-3 rounded border border-red-500/20">Physics Data Missing or Corrupted</p>
             )}
           </div>
 
           {/* BINARY FORENSICS */}
-          <div className="border border-gray-800 rounded-lg p-5 bg-gray-900/30">
-            <div className="flex items-center gap-2 mb-4 border-b border-gray-800 pb-2">
+          <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 backdrop-blur-sm">
+            <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
               <Cpu className="w-5 h-5 text-blue-500" />
-              <h3 className="text-lg font-semibold text-white">Binary Inspection</h3>
+              <h3 className="text-sm font-bold text-white uppercase tracking-widest">Binary Inspection</h3>
             </div>
-            <p className="text-sm leading-relaxed text-gray-400">
+            <p className="text-xs font-mono leading-relaxed text-gray-400 bg-black/40 p-4 rounded-xl border border-white/5">
               {manifest?.visual || "No binary analysis available."}
             </p>
           </div>
         </div>
 
         {/* CRYPTOGRAPHIC ANCHOR */}
-        <section className="border border-gray-800 rounded-lg p-5 bg-gray-900/30">
-          <div className="flex items-center gap-2 mb-4 border-b border-gray-800 pb-2">
+        <section className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 backdrop-blur-sm">
+          <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
             <Key className="w-5 h-5 text-purple-500" />
-            <h3 className="text-lg font-semibold text-white">Cryptographic Anchor</h3>
+            <h3 className="text-sm font-bold text-white uppercase tracking-widest">Cryptographic Anchor</h3>
           </div>
-          <div className="space-y-4 text-xs break-all">
+          <div className="space-y-6 text-xs font-mono break-all">
             <div>
-              <p className="text-gray-500 mb-1 flex items-center gap-1"><Hash className="w-3 h-3"/> SHA-256 Header Fingerprint</p>
-              <p className="text-gray-300 bg-black p-2 rounded border border-gray-800">{audit.headerHash || "N/A"}</p>
+              <p className="text-gray-500 mb-2 flex items-center gap-2"><Hash className="w-3 h-3"/> SHA-256 Header Fingerprint</p>
+              <p className="text-gray-300 bg-black/60 p-4 rounded-xl border border-white/5 shadow-inner">{audit.headerHash || "N/A"}</p>
             </div>
             <div>
-              <p className="text-gray-500 mb-1 flex items-center gap-1"><Key className="w-3 h-3"/> ECDSA secp256k1 Oracle Signature</p>
-              <p className="text-purple-400 bg-black p-2 rounded border border-gray-800">{audit.oracleSignature || "UNSIGNED"}</p>
+              <p className="text-gray-500 mb-2 flex items-center gap-2"><Key className="w-3 h-3"/> ECDSA secp256k1 Oracle Signature</p>
+              <p className="text-purple-400 bg-purple-900/10 p-4 rounded-xl border border-purple-500/20 shadow-inner">{audit.oracleSignature || "UNSIGNED"}</p>
             </div>
           </div>
         </section>
 
         {/* FOOTER */}
-        <footer className="text-center text-xs text-gray-600 pt-8 border-t border-gray-800">
-          <p>Forensic Reality Protocol (FRP) • Architect: Bolu Adeoye</p>
-          <p className="mt-1">This manifest is mathematically verifiable using the FRP Public Key.</p>
+        <footer className="text-center pt-12 pb-8">
+          <div className="inline-flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10 mb-4">
+            <Globe className="w-3 h-3 text-gray-400" />
+            <span className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Global Edge Network</span>
+          </div>
+          <p className="text-xs text-gray-600 font-sans">Forensic Reality Protocol (FRP) • Architect: Bolu Adeoye</p>
+          <p className="text-[10px] text-gray-700 font-mono mt-2">This manifest is mathematically verifiable using the FRP Public Key.</p>
         </footer>
 
       </div>
