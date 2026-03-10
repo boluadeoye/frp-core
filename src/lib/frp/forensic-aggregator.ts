@@ -4,7 +4,6 @@ import { eq } from "drizzle-orm";
 import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
 import * as SunCalc from "suncalc";
-import exifr from "exifr/dist/lite.esm.js"; // Edge/Bundle safe version
 
 export class ForensicAggregator {
   private static toBase64Safe(buffer: Uint8Array): string {
@@ -17,40 +16,37 @@ export class ForensicAggregator {
     return btoa(binary);
   }
 
-  private static async extractPhysicalContext(buffer: Uint8Array) {
+  /**
+   * Calculates Physics based on Client-Provided EXIF data.
+   */
+  private static calculatePhysics(clientExif: any) {
     try {
-      const metadata = await exifr.parse(buffer, {
-        gps: true,
-        exif: true,
-        pick:['latitude', 'longitude', 'DateTimeOriginal', 'ISO', 'ExposureTime']
-      });
-
-      if (!metadata || !metadata.latitude || !metadata.longitude) {
-        return { error: "GPS_MISSING_IN_HEADER" };
+      if (!clientExif || !clientExif.latitude || !clientExif.longitude) {
+        return { error: "CLIENT_GPS_MISSING" };
       }
 
-      const lat = metadata.latitude;
-      const lon = metadata.longitude;
-      const timestamp = metadata.DateTimeOriginal || new Date();
+      const lat = parseFloat(clientExif.latitude);
+      const lon = parseFloat(clientExif.longitude);
+      const timestamp = clientExif.timestamp ? new Date(clientExif.timestamp) : new Date();
 
-      const sunPos = SunCalc.getPosition(new Date(timestamp), lat, lon);
+      const sunPos = SunCalc.getPosition(timestamp, lat, lon);
 
       return {
         lat: lat.toFixed(4),
         lon: lon.toFixed(4),
-        timestamp,
+        timestamp: timestamp.toISOString(),
         sunAzimuth: (sunPos.azimuth * 180 / Math.PI).toFixed(2),
         sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
-        iso: metadata.ISO,
-        exposureTime: metadata.ExposureTime
+        iso: clientExif.iso || "Unknown",
+        exposureTime: clientExif.exposureTime || "Unknown"
       };
     } catch (e: any) {
-      return { error: `PARSE_FAILED: ${e.message}` };
+      return { error: `PHYSICS_CALC_FAILED: ${e.message}` };
     }
   }
 
-  static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string) {
-    console.log(`[AGGREGATOR] Heavyweight Physics Audit Started: ${traceId}`);
+  static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any) {
+    console.log(`[AGGREGATOR] Zero-Trust Physics Audit Started: ${traceId}`);
 
     try {
       const burned = await db.query.burnRegistry.findFirst({
@@ -67,8 +63,9 @@ export class ForensicAggregator {
         return;
       }
 
-      const physics = await this.extractPhysicalContext(headerBuffer);
-      console.log(`[AGGREGATOR] Physics Data:`, physics);
+      // 1. Calculate Physics from Client Data
+      const physics = this.calculatePhysics(clientExif);
+      console.log(`[AGGREGATOR] Physics Calculated:`, physics);
       
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
@@ -82,16 +79,14 @@ export class ForensicAggregator {
         messages:[
           {
             role: "system",
-            content: `You are a Forensic Physics Auditor. Analyze the image header sliver and physics context.
-            Physics Context: ${JSON.stringify(physics)}
-            Task: 
-            1. If GPS is present, verify if the EXIF light settings (ISO/Exposure) match the sun altitude.
-            2. Inspect the binary sliver for 'Adobe', 'Photoshop', or 'Canva'.
+            content: `You are a Forensic Physics Auditor. 
+            1. Analyze the Physics Context (calculated from client GPS). Does the sun altitude match the ISO/Exposure? (e.g., High altitude = bright day = low ISO).
+            2. Inspect the Header Sliver (Base64) for 'Adobe', 'Photoshop', or 'Canva'.
             Return ONLY JSON: {"confidence_score": 0.0-1.0, "analysis": "string"}`
           },
           {
             role: "user",
-            content: `Header Sliver (Base64): ${base64Sliver}`
+            content: `Physics Context: ${JSON.stringify(physics)}\nHeader Sliver (Base64): ${base64Sliver}`
           }
         ],
         temperature: 0.1,
@@ -117,6 +112,7 @@ export class ForensicAggregator {
           forensicManifest: { 
             visual: analysis.analysis, 
             physics_report: physics,
+            client_exif_provided: !!clientExif,
             model: modelId 
           },
           completedAt: new Date()

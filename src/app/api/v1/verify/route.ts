@@ -4,13 +4,11 @@ import { db } from '@/db';
 import { auditLedger } from '@/db/schema';
 import { ForensicAggregator } from '@/lib/frp/forensic-aggregator';
 
-// REMOVED: export const runtime = 'edge';
-// This route now runs on Vercel's Heavyweight Node.js Serverless infrastructure.
-
 export async function POST(req: Request) {
   try {
     const body = await req.json();
-    const { imageUrl, agentId } = body;
+    // NEW: Accept clientExif from the payload
+    const { imageUrl, agentId, clientExif } = body;
 
     if (!imageUrl || !agentId) {
       return NextResponse.json({ error: 'Missing fields' }, { status: 400 });
@@ -18,7 +16,7 @@ export async function POST(req: Request) {
 
     const traceId = crypto.randomUUID();
 
-    // 1. Surgical Header Extraction (64KB)
+    // 1. Surgical Header Extraction (8KB is enough now since we don't parse GPS locally)
     const headerData = await StreamParser.extractHeaders(imageUrl);
 
     // 2. Log to Ledger
@@ -31,8 +29,8 @@ export async function POST(req: Request) {
       forensicManifest: { preliminary: { exifDetected: headerData.exifFound } }
     });
 
-    // 3. Execute Weaponized Physics Audit
-    await ForensicAggregator.processAudit(traceId, imageUrl, headerData.buffer, headerData.hash);
+    // 3. Execute Zero-Trust Physics Audit
+    await ForensicAggregator.processAudit(traceId, imageUrl, headerData.buffer, headerData.hash, clientExif);
 
     return NextResponse.json({
       status: 'completed',
