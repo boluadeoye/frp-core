@@ -5,49 +5,55 @@ import { useRouter } from "next/navigation";
 import { 
   Shield, Crosshair, Activity, AlertTriangle, Terminal, 
   Database, Globe, Cpu, ChevronRight, Upload, 
-  Zap, Lock, Fingerprint, BarChart3, Map as MapIcon
+  Zap, Lock, Fingerprint, BarChart3, Scan, Radio
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import exifr from "exifr/dist/lite.esm.js";
 
-// --- THE BLAZING REACTOR LOGO ---
+// --- THE BLAZING SINGULARITY LOGO ---
 const BlazingLogo = () => (
-  <div className="relative flex items-center justify-center w-16 h-16 group">
+  <div className="relative flex items-center justify-center w-20 h-20 group">
+    {/* Outer Orbital Ring */}
     <motion.div
-      animate={{ 
-        rotate: [0, 90, 180, 270, 360],
-        borderColor: ["rgba(16,185,129,0.2)", "rgba(16,185,129,0.8)", "rgba(16,185,129,0.2)"]
-      }}
-      transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
-      className="absolute inset-0 border-2 border-dashed rounded-2xl"
+      animate={{ rotate: 360 }}
+      transition={{ repeat: Infinity, duration: 10, ease: "linear" }}
+      className="absolute inset-0 border border-emerald-500/10 rounded-full"
     />
-    <div className="relative flex items-center justify-center w-12 h-12 rounded-xl bg-black border border-emerald-500/40 overflow-hidden shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+    {/* Inner Pulsing Ring */}
+    <motion.div
+      animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.5, 0.2] }}
+      transition={{ repeat: Infinity, duration: 2, ease: "easeInOut" }}
+      className="absolute inset-2 border-2 border-emerald-500/30 rounded-2xl"
+    />
+    {/* The Core */}
+    <div className="relative flex items-center justify-center w-14 h-14 rounded-2xl bg-black border border-emerald-500/50 overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.3)]">
       <motion.div
-        animate={{ opacity: [0.3, 0.6, 0.3] }}
-        transition={{ repeat: Infinity, duration: 2 }}
-        className="absolute inset-0 bg-emerald-500/10 blur-xl"
+        animate={{ opacity: [0.4, 0.7, 0.4] }}
+        transition={{ repeat: Infinity, duration: 1.5 }}
+        className="absolute inset-0 bg-emerald-500/20 blur-2xl"
       />
-      <span className="text-emerald-400 font-black text-3xl font-sans tracking-tighter z-10 drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]">
+      <span className="text-emerald-400 font-black text-4xl font-sans tracking-tighter z-10 drop-shadow-[0_0_15px_rgba(16,185,129,1)]">
         F
       </span>
+      {/* High-Speed Scanning Laser */}
       <motion.div 
         animate={{ top: ["-100%", "200%"] }}
-        transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
-        className="absolute left-0 right-0 h-[2px] bg-emerald-400/40 z-20 shadow-[0_0_10px_rgba(16,185,129,1)]"
+        transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }}
+        className="absolute left-0 right-0 h-[3px] bg-emerald-400 z-20 shadow-[0_0_15px_rgba(16,185,129,1)]"
       />
     </div>
   </div>
 );
 
-// --- SYSTEM PULSE WAVEFORM ---
-const SystemPulse = () => (
-  <div className="flex items-end gap-1 h-4">
-    {[...Array(12)].map((_, i) => (
+// --- DATA STREAM COMPONENT ---
+const DataStream = () => (
+  <div className="flex gap-1 items-center">
+    {[...Array(6)].map((_, i) => (
       <motion.div
         key={i}
-        animate={{ height: [2, Math.random() * 16 + 2, 2] }}
-        transition={{ repeat: Infinity, duration: 0.5 + Math.random(), ease: "easeInOut" }}
-        className="w-[2px] bg-emerald-500/40 rounded-full"
+        animate={{ opacity: [0.2, 1, 0.2] }}
+        transition={{ repeat: Infinity, duration: 1, delay: i * 0.1 }}
+        className="w-1 h-1 bg-emerald-500 rounded-full"
       />
     ))}
   </div>
@@ -74,17 +80,14 @@ export default function CommandDeck() {
   }, [terminalLogs]);
 
   const addLog = (msg: string) => {
-    setTerminalLogs(prev => [...prev, `> ${msg}`]);
+    setTerminalLogs(prev => [...prev, msg.toUpperCase()]);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-
     setError("");
-    addLog(`MOUNTING LOCAL VOLUME: ${file.name.toUpperCase()}`);
-    addLog("SCANNING BINARY STRUCTURE...");
-    
+    addLog(`ACCESSING_LOCAL_STORAGE: ${file.name}`);
     try {
       const metadata = await exifr.parse(file, {
         gps: true, exif: true,
@@ -92,27 +95,25 @@ export default function CommandDeck() {
       }).catch(() => null);
 
       if (!metadata || (!metadata.latitude && !metadata.DateTimeOriginal)) {
-        setError("METADATA STRIPPED OR MISSING. PROCEED WITH MANUAL OVERRIDE.");
-        addLog("CRITICAL: EXIF DIRECTORY NOT FOUND. SWITCHING TO MANUAL INGESTION.");
+        setError("FORENSIC_ALERT: METADATA_STRIPPED. MANUAL_OVERRIDE_REQUIRED.");
+        addLog("CRITICAL_FAILURE: EXIF_NOT_FOUND.");
         return;
       }
 
       if (metadata.latitude) {
         setLat(metadata.latitude.toFixed(6));
         setLon(metadata.longitude.toFixed(6));
-        addLog("GEOSPATIAL COORDINATES DECODED.");
+        addLog("GPS_COORDINATES_LOCKED.");
       }
       if (metadata.DateTimeOriginal) {
         setTimestamp(new Date(metadata.DateTimeOriginal).toISOString());
-        addLog("TEMPORAL ANCHOR ESTABLISHED.");
+        addLog("TEMPORAL_ANCHOR_VERIFIED.");
       }
       if (metadata.ISO) setIso(metadata.ISO.toString());
       if (metadata.ExposureTime) setExposure(metadata.ExposureTime.toString());
-
-      addLog("EXTRACTION SUCCESSFUL. AWAITING TARGET URL.");
+      addLog("LOCAL_SCAN_COMPLETE.");
     } catch (err: any) {
-      setError("FORENSIC PARSE FAILURE.");
-      addLog(`ERROR: ${err.message}`);
+      setError("SYSTEM_ERROR: PARSE_FAILURE.");
     }
   };
 
@@ -123,7 +124,7 @@ export default function CommandDeck() {
     setTimestamp("2008-10-22T10:28:39Z");
     setIso("100");
     setExposure("1/500");
-    addLog("TEST VECTOR INJECTED INTO BUFFER.");
+    addLog("TEST_VECTOR_INJECTED.");
   };
 
   const executeAudit = async (e: React.FormEvent) => {
@@ -133,13 +134,13 @@ export default function CommandDeck() {
     setTerminalLogs([]);
 
     try {
-      addLog("INITIALIZING FRP ORACLE V1.2...");
-      await new Promise(r => setTimeout(r, 600));
-      addLog("CHECKING OUT GROQ LPU KEY FROM POOL...");
+      addLog("INITIALIZING_ORACLE_HANDSHAKE...");
+      await new Promise(r => setTimeout(r, 500));
+      addLog("ROTATING_GROQ_API_KEYS...");
       
       const payload = {
         imageUrl,
-        agentId: "mercenary-node-" + Math.floor(Math.random() * 1000),
+        agentId: "sovereign-node-" + Math.floor(Math.random() * 1000),
         clientExif: {
           latitude: parseFloat(lat),
           longitude: parseFloat(lon),
@@ -149,7 +150,7 @@ export default function CommandDeck() {
         }
       };
 
-      addLog("DISPATCHING SURGICAL BINARY STRIKE...");
+      addLog("DISPATCHING_SURGICAL_BINARY_STRIKE...");
       const res = await fetch("/api/v1/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -159,177 +160,178 @@ export default function CommandDeck() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || "ORACLE_REJECTION");
 
-      addLog("ASTRONOMICAL CROSS-REFERENCE COMPLETE.");
-      addLog("GENERATING ECDSA SECP256K1 SIGNATURE...");
-      addLog(`AUDIT FINALIZED. TRACE: ${data.traceId.substring(0,8)}...`);
+      addLog("PHYSICS_CROSS_REFERENCE_SUCCESS.");
+      addLog("SIGNING_ECDSA_MANIFEST...");
+      addLog(`AUDIT_FINALIZED: ${data.traceId.substring(0,8)}`);
       
       await new Promise(r => setTimeout(r, 800));
       router.push(`/cert/${data.traceId}`);
 
     } catch (err: any) {
       setError(err.message);
-      addLog(`FATAL: ${err.message}`);
+      addLog(`FATAL_EXCEPTION: ${err.message}`);
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-[#000000] text-gray-400 p-4 md:p-10 font-sans selection:bg-emerald-500/30 relative overflow-hidden">
+    <main className="min-h-screen bg-[#000000] text-gray-400 p-4 md:p-12 font-sans selection:bg-emerald-500/40 relative overflow-hidden">
       
-      {/* GRID OVERLAY */}
-      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
-      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
+      {/* SOPHISTICATED BACKGROUND ELEMENTS */}
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-30 pointer-events-none mix-blend-overlay" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#ffffff05_1px,transparent_1px),linear-gradient(to_bottom,#ffffff05_1px,transparent_1px)] bg-[size:60px_60px]" />
+      <div className="absolute top-0 left-0 w-full h-full bg-[radial-gradient(circle_at_50%_0%,#10b9810a_0%,transparent_50%)]" />
 
-      <div className="max-w-7xl mx-auto space-y-10 relative z-10">
+      <div className="max-w-[1400px] mx-auto space-y-12 relative z-10">
         
-        {/* TOP NAVIGATION BAR */}
-        <nav className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
-          <div className="flex items-center gap-6">
+        {/* SOVEREIGN HEADER */}
+        <nav className="flex flex-col lg:flex-row justify-between items-start lg:items-center gap-8">
+          <div className="flex items-center gap-8">
             <BlazingLogo />
-            <div>
-              <h1 className="text-3xl font-black text-white tracking-[ -0.05em] uppercase leading-none">
-                Forensic Reality <span className="text-emerald-500">Protocol</span>
+            <div className="space-y-1">
+              <h1 className="text-4xl font-black text-white tracking-[-0.06em] uppercase italic">
+                Forensic Reality <span className="text-emerald-500 not-italic">Protocol</span>
               </h1>
-              <div className="flex items-center gap-3 mt-2">
-                <span className="text-[10px] font-mono text-emerald-500/60 tracking-[0.3em] uppercase">Sovereign Truth Infrastructure</span>
-                <SystemPulse />
+              <div className="flex items-center gap-4">
+                <span className="text-[10px] font-mono text-emerald-500/50 tracking-[0.5em] uppercase">Sovereign Truth Infrastructure</span>
+                <DataStream />
               </div>
             </div>
           </div>
           
-          <div className="flex items-center gap-4">
-            <div className="hidden md:flex flex-col items-end font-mono">
-              <span className="text-[10px] text-gray-600 uppercase tracking-tighter">Network Load</span>
-              <span className="text-xs text-emerald-500/80">0.042ms Latency</span>
+          <div className="flex items-center gap-6 bg-white/[0.02] border border-white/5 p-2 rounded-2xl backdrop-blur-xl">
+            <div className="flex flex-col items-end px-4 border-r border-white/10">
+              <span className="text-[9px] font-mono text-gray-600 uppercase tracking-widest">Network Status</span>
+              <span className="text-xs font-bold text-emerald-500 font-mono">ENCRYPTED_ACTIVE</span>
             </div>
-            <div className="h-10 w-[1px] bg-white/10 hidden md:block" />
-            <div className="bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2 backdrop-blur-md flex items-center gap-3">
-              <Globe className="w-4 h-4 text-blue-500" />
-              <span className="text-xs font-bold text-white font-mono uppercase">Global Edge</span>
+            <div className="flex items-center gap-4 pr-4">
+              <div className="w-10 h-10 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                <Globe className="w-5 h-5 text-blue-500" />
+              </div>
+              <span className="text-xs font-black text-white font-mono uppercase tracking-tighter">Global Edge v1.2</span>
             </div>
           </div>
         </nav>
 
-        {/* MAIN BENTO GRID */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+        {/* MAIN COMMAND INTERFACE */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
           
-          {/* TARGET ACQUISITION CARD */}
-          <div className="lg:col-span-8 space-y-6">
-            <div className="bg-[#080808] border border-white/5 rounded-[2rem] p-8 relative overflow-hidden shadow-2xl group">
-              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
-                <Crosshair className="w-32 h-32 text-emerald-500" />
-              </div>
-
-              <div className="flex justify-between items-center mb-10 relative z-10">
-                <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
-                    <Zap className="w-5 h-5 text-emerald-500" />
+          {/* LEFT: INGESTION ENGINE */}
+          <div className="lg:col-span-8">
+            <div className="bg-gradient-to-br from-[#0a0a0a] to-[#050505] border border-white/10 rounded-[2.5rem] p-10 relative overflow-hidden shadow-[0_50px_100px_-20px_rgba(0,0,0,1)]">
+              
+              <div className="flex justify-between items-center mb-12">
+                <div className="flex items-center gap-4">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 shadow-[0_0_20px_rgba(16,185,129,0.1)]">
+                    <Scan className="w-6 h-6 text-emerald-500" />
                   </div>
-                  <h2 className="text-xl font-bold text-white tracking-tight">Target Acquisition</h2>
+                  <h2 className="text-2xl font-bold text-white tracking-tight">Target Acquisition</h2>
                 </div>
                 <button 
                   type="button" onClick={loadTestVector}
-                  className="text-[10px] font-mono text-gray-500 hover:text-emerald-400 transition-all border border-white/5 px-4 py-2 rounded-full bg-white/[0.02]"
+                  className="text-[10px] font-mono text-gray-500 hover:text-emerald-400 transition-all border border-white/5 px-6 py-2.5 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] uppercase tracking-widest"
                 >
-                  LOAD_TEST_VECTOR.EXE
+                  Load_Test_Vector
                 </button>
               </div>
 
-              {/* UPLOAD ZONE */}
-              <div className="mb-8 group/upload relative">
+              {/* HIGH-TECH UPLOAD ZONE */}
+              <div className="mb-10 group/upload relative">
                 <input 
                   type="file" accept="image/jpeg" onChange={handleFileUpload}
                   className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
-                <div className="border-2 border-dashed border-white/5 rounded-2xl p-10 bg-white/[0.01] group-hover/upload:bg-white/[0.03] group-hover/upload:border-emerald-500/30 transition-all flex flex-col items-center justify-center gap-4 text-center">
-                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover/upload:scale-110 transition-transform">
-                    <Upload className="w-6 h-6 text-emerald-500" />
+                <div className="border border-white/5 rounded-3xl p-12 bg-white/[0.01] group-hover/upload:bg-white/[0.03] group-hover/upload:border-emerald-500/20 transition-all flex flex-col items-center justify-center gap-6 text-center relative overflow-hidden">
+                  <motion.div 
+                    animate={{ opacity: [0.1, 0.3, 0.1] }}
+                    transition={{ repeat: Infinity, duration: 4 }}
+                    className="absolute inset-0 bg-emerald-500/5 blur-3xl"
+                  />
+                  <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover/upload:scale-110 transition-transform shadow-[0_0_30px_rgba(16,185,129,0.1)]">
+                    <Upload className="w-8 h-8 text-emerald-500" />
                   </div>
-                  <div>
-                    <p className="text-sm font-bold text-white uppercase tracking-widest">Initialize Local Scan</p>
-                    <p className="text-xs text-gray-500 mt-1 font-mono">Drop image to auto-extract forensic metadata</p>
+                  <div className="relative z-10">
+                    <p className="text-lg font-bold text-white uppercase tracking-[0.2em]">Initialize Local Scan</p>
+                    <p className="text-xs text-gray-500 mt-2 font-mono uppercase tracking-widest">Drop image to extract forensic DNA</p>
                   </div>
                 </div>
               </div>
 
               {error && (
-                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-8 bg-red-500/5 border border-red-500/20 text-red-400 p-5 rounded-2xl text-xs flex items-start gap-4 font-mono">
-                  <AlertTriangle className="w-5 h-5 shrink-0" /> 
-                  <p className="leading-relaxed">{error}</p>
+                <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} className="mb-10 bg-red-500/5 border border-red-500/20 text-red-400 p-6 rounded-2xl text-xs flex items-start gap-4 font-mono leading-relaxed">
+                  <AlertTriangle className="w-6 h-6 shrink-0" /> 
+                  <p>{error}</p>
                 </motion.div>
               )}
 
-              <form onSubmit={executeAudit} className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
-                <div className="md:col-span-2 space-y-2">
-                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Target URL</label>
-                  <div className="relative">
+              <form onSubmit={executeAudit} className="grid grid-cols-1 md:grid-cols-2 gap-10">
+                <div className="md:col-span-2 space-y-3">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.4em] ml-1">Target_Source_URL</label>
+                  <div className="relative group/input">
                     <input 
                       type="url" required value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-                      className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono placeholder:text-gray-800"
-                      placeholder="HTTPS://SOURCE_IMAGE_PATH"
+                      className="w-full bg-transparent border-b border-white/10 py-4 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono placeholder:text-gray-800"
+                      placeholder="HTTPS://DATA_STREAM_ORIGIN"
                     />
-                    <Lock className="absolute right-3 top-3 w-4 h-4 text-gray-800" />
+                    <Lock className="absolute right-0 top-4 w-4 h-4 text-gray-800 group-focus-within/input:text-emerald-900 transition-colors" />
                   </div>
                 </div>
 
-                <div className="space-y-2">
-                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Latitude</label>
-                  <input type="number" step="any" required value={lat} onChange={(e) => setLat(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                <div className="space-y-3">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.4em] ml-1">Latitude</label>
+                  <input type="number" step="any" required value={lat} onChange={(e) => setLat(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-4 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Longitude</label>
-                  <input type="number" step="any" required value={lon} onChange={(e) => setLon(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                <div className="space-y-3">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.4em] ml-1">Longitude</label>
+                  <input type="number" step="any" required value={lon} onChange={(e) => setLon(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-4 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
                 </div>
-                <div className="space-y-2">
-                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Timestamp</label>
-                  <input type="text" required value={timestamp} onChange={(e) => setTimestamp(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                <div className="space-y-3">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.4em] ml-1">Temporal_Anchor</label>
+                  <input type="text" required value={timestamp} onChange={(e) => setTimestamp(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-4 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
                 </div>
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">ISO</label>
-                    <input type="number" required value={iso} onChange={(e) => setIso(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                <div className="grid grid-cols-2 gap-6">
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.4em] ml-1">ISO</label>
+                    <input type="number" required value={iso} onChange={(e) => setIso(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-4 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
                   </div>
-                  <div className="space-y-2">
-                    <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Exposure</label>
-                    <input type="text" required value={exposure} onChange={(e) => setExposure(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                  <div className="space-y-3">
+                    <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.4em] ml-1">Exposure</label>
+                    <input type="text" required value={exposure} onChange={(e) => setExposure(e.target.value)} className="w-full bg-transparent border-b border-white/10 py-4 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
                   </div>
                 </div>
 
                 <button 
                   type="submit" disabled={loading}
-                  className="md:col-span-2 w-full mt-6 bg-white text-black hover:bg-emerald-500 hover:text-white font-black py-5 rounded-2xl transition-all flex justify-center items-center gap-4 disabled:opacity-50 group/btn"
+                  className="md:col-span-2 w-full mt-10 bg-white text-black hover:bg-emerald-500 hover:text-white font-black py-6 rounded-3xl transition-all flex justify-center items-center gap-6 disabled:opacity-50 group/btn shadow-[0_20px_40px_-10px_rgba(255,255,255,0.1)] hover:shadow-[0_20px_40px_-10px_rgba(16,185,129,0.3)]"
                 >
-                  {loading ? <Activity className="w-6 h-6 animate-spin" /> : <Fingerprint className="w-6 h-6 group-hover/btn:scale-110 transition-transform" />}
-                  <span className="tracking-[0.2em] uppercase text-sm">{loading ? "Processing Audit..." : "Execute Forensic Audit"}</span>
+                  {loading ? <Activity className="w-7 h-7 animate-spin" /> : <Fingerprint className="w-7 h-7 group-hover/btn:scale-110 transition-transform" />}
+                  <span className="tracking-[0.4em] uppercase text-base">{loading ? "Processing_Audit..." : "Execute Forensic Audit"}</span>
                 </button>
               </form>
             </div>
           </div>
 
-          {/* RIGHT COLUMN: SYSTEM STATUS */}
-          <div className="lg:col-span-4 space-y-6">
+          {/* RIGHT: SYSTEM INTELLIGENCE */}
+          <div className="lg:col-span-4 space-y-8">
             
-            {/* TERMINAL CARD */}
-            <div className="bg-[#080808] border border-white/5 rounded-[2rem] p-6 h-[400px] flex flex-col shadow-2xl">
-              <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
-                <div className="flex items-center gap-2">
-                  <Terminal className="w-4 h-4 text-emerald-500" />
-                  <h3 className="text-[10px] font-mono text-white uppercase tracking-[0.2em]">Execution Log</h3>
+            {/* NEURAL TERMINAL */}
+            <div className="bg-[#050505] border border-white/10 rounded-[2.5rem] p-8 h-[450px] flex flex-col shadow-2xl relative overflow-hidden">
+              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/40 to-transparent" />
+              <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-5">
+                <div className="flex items-center gap-3">
+                  <Terminal className="w-5 h-5 text-emerald-500" />
+                  <h3 className="text-xs font-mono text-white uppercase tracking-[0.3em]">Neural_Log</h3>
                 </div>
-                <div className="flex gap-1">
-                  <div className="w-2 h-2 rounded-full bg-red-500/20" />
-                  <div className="w-2 h-2 rounded-full bg-amber-500/20" />
-                  <div className="w-2 h-2 rounded-full bg-emerald-500/20" />
-                </div>
+                <Radio className="w-4 h-4 text-emerald-500/40 animate-pulse" />
               </div>
-              <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-[10px] space-y-3 text-emerald-500/70 scrollbar-hide">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-[10px] space-y-4 text-emerald-400/80 scrollbar-hide">
                 {terminalLogs.length === 0 ? (
                   <p className="text-gray-800 animate-pulse">_ AWAITING_TARGET_ACQUISITION...</p>
                 ) : (
                   <AnimatePresence>
                     {terminalLogs.map((log, i) => (
-                      <motion.div key={i} initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} className="flex gap-2">
-                        <span className="text-emerald-900">[{i}]</span>
+                      <motion.div key={i} initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} className="flex gap-3 leading-relaxed">
+                        <span className="text-emerald-900 shrink-0">[{i.toString().padStart(2, '0')}]</span>
                         <span className="break-all">{log}</span>
                       </motion.div>
                     ))}
@@ -338,33 +340,33 @@ export default function CommandDeck() {
               </div>
             </div>
 
-            {/* STATS BENTO */}
+            {/* METRIC BENTO */}
             <div className="grid grid-cols-1 gap-4">
-              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex items-center gap-5">
-                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
-                  <Database className="w-6 h-6 text-blue-500" />
+              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 flex items-center gap-6 hover:bg-white/[0.04] transition-colors group">
+                <div className="w-14 h-14 rounded-2xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20 group-hover:scale-110 transition-transform">
+                  <Database className="w-7 h-7 text-blue-500" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Ledger Status</p>
-                  <p className="text-lg font-bold text-white font-mono">SYNCED_NEON</p>
+                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Ledger_Status</p>
+                  <p className="text-xl font-bold text-white font-mono tracking-tighter">SYNCED_NEON</p>
                 </div>
               </div>
-              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex items-center gap-5">
-                <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
-                  <Cpu className="w-6 h-6 text-purple-500" />
+              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 flex items-center gap-6 hover:bg-white/[0.04] transition-colors group">
+                <div className="w-14 h-14 rounded-2xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20 group-hover:scale-110 transition-transform">
+                  <Cpu className="w-7 h-7 text-purple-500" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Oracle Engine</p>
-                  <p className="text-lg font-bold text-white font-mono">70B_LPU_V1</p>
+                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Oracle_Engine</p>
+                  <p className="text-xl font-bold text-white font-mono tracking-tighter">70B_LPU_V1.2</p>
                 </div>
               </div>
-              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex items-center gap-5">
-                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
-                  <BarChart3 className="w-6 h-6 text-amber-500" />
+              <div className="bg-white/[0.02] border border-white/5 rounded-3xl p-6 flex items-center gap-6 hover:bg-white/[0.04] transition-colors group">
+                <div className="w-14 h-14 rounded-2xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20 group-hover:scale-110 transition-transform">
+                  <BarChart3 className="w-7 h-7 text-amber-500" />
                 </div>
                 <div>
-                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Burn Registry</p>
-                  <p className="text-lg font-bold text-white font-mono">ACTIVE_1.2k</p>
+                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Burn_Registry</p>
+                  <p className="text-xl font-bold text-white font-mono tracking-tighter">ACTIVE_1.2k</p>
                 </div>
               </div>
             </div>
