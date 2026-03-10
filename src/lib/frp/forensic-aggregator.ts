@@ -4,7 +4,7 @@ import { eq } from "drizzle-orm";
 import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
 import * as SunCalc from "suncalc";
-import exifr from "exifr";
+import exifr from "exifr/dist/lite.esm.js";
 
 export class ForensicAggregator {
   private static toBase64Safe(buffer: Uint8Array): string {
@@ -19,20 +19,19 @@ export class ForensicAggregator {
 
   private static async extractPhysicalContext(buffer: Uint8Array) {
     try {
-      // exifr.parse is Edge-native and handles Uint8Array perfectly
+      // Using the Edge-safe ESM build of exifr
       const metadata = await exifr.parse(buffer, {
         gps: true,
         exif: true,
         pick: ['GPSLatitude', 'GPSLongitude', 'DateTimeOriginal', 'ISO', 'ExposureTime']
       });
 
-      if (!metadata || !metadata.GPSLatitude || !metadata.GPSLongitude) {
+      if (!metadata || !metadata.latitude || !metadata.longitude) {
         return { error: "GPS_MISSING_IN_HEADER" };
       }
 
-      // exifr returns decimal coordinates automatically
-      const lat = metadata.GPSLatitude;
-      const lon = metadata.GPSLongitude;
+      const lat = metadata.latitude;
+      const lon = metadata.longitude;
       const timestamp = metadata.DateTimeOriginal || new Date();
 
       const sunPos = SunCalc.getPosition(new Date(timestamp), lat, lon);
@@ -69,7 +68,6 @@ export class ForensicAggregator {
         return;
       }
 
-      // 1. Extract Physics (Async exifr)
       const physics = await this.extractPhysicalContext(headerBuffer);
       
       const key = await KeyManager.getValidKey();
