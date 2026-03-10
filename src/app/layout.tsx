@@ -5,33 +5,47 @@ import "./globals.css";
 const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "FRP | Forensic Reality Protocol",
-  description: "The Truth Oracle for AI Agents and DePIN. Physical State Verification powered by Llama 4 Scout.",
+  title: "FRP // Forensic Reality Protocol",
+  description: "Sovereign Truth Infrastructure for AI Agents and DePIN. Deterministic physical state verification powered by solar physics and cryptography.",
+  keywords: ["Forensic AI", "DePIN Security", "C2PA", "Physical State Verification", "Bolu Adeoye", "Truth Oracle"],
+  openGraph: {
+    title: "FRP // Forensic Reality Protocol",
+    description: "The Mathematical Seal of Reality.",
+    type: "website",
+    url: "https://frp-core.vercel.app",
+  }
 };
 
-export default function RootLayout({
-  children,
-}: {
-  children: React.ReactNode;
-}) {
+export default function RootLayout({ children }: { children: React.ReactNode }) {
   const jsonLd = {
     "@context": "https://schema.org",
-    "@type": "SoftwareApplication",
-    "name": "Forensic Reality Protocol",
-    "applicationCategory": "SecurityApplication",
-    "operatingSystem": "Any",
-    "author": {
-      "@type": "Person",
-      "name": "Bolu Adeoye",
-      "jobTitle": "Strategic Systems Architect & Forensic Specialist",
-      "url": "https://linkedin.com/in/bolu-adeoye"
-    },
-    "description": "Deterministic physical state verification for AI Agents using C2PA and Llama 4 Scout.",
-    "offers": {
-      "@type": "Offer",
-      "price": "0.10",
-      "priceCurrency": "USD"
-    }
+    "@graph": [
+      {
+        "@type": "SoftwareApplication",
+        "@id": "https://frp-core.vercel.app/#protocol",
+        "name": "Forensic Reality Protocol",
+        "applicationCategory": "SecurityApplication",
+        "operatingSystem": "Any",
+        "description": "Deterministic physical state verification using SunCalc and ECDSA signatures.",
+        "author": { "@id": "https://frp-core.vercel.app/#person" },
+        "offers": {
+          "@type": "Offer",
+          "price": "0.10",
+          "priceCurrency": "USD"
+        }
+      },
+      {
+        "@type": "Person",
+        "@id": "https://frp-core.vercel.app/#person",
+        "name": "Bolu Adeoye",
+        "jobTitle": "Strategic Systems Architect",
+        "description": "Former Global Forensic Consultant at Deloitte, specializing in cryptographic truth and systems architecture.",
+        "sameAs": [
+          "https://linkedin.com/in/bolu-adeoye",
+          "https://x.com/boluadeoye"
+        ]
+      }
+    ]
   };
 
   return (
@@ -42,7 +56,7 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className={inter.className}>{children}</body>
+      <body className={`${inter.className} bg-black`}>{children}</body>
     </html>
   );
 }

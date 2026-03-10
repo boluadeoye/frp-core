@@ -1,0 +1,5 @@
+User-agent: *
+Allow: /
+Allow: /docs
+Allow: /cert/
+Sitemap: https://frp-core.vercel.app/sitemap.xml
