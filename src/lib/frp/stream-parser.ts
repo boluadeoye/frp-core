@@ -9,7 +9,7 @@ export interface ForensicHeader {
 }
 
 export class StreamParser {
-  // Increased to 64KB for absolute reliability with exifr
+  // 64KB ensures we capture the full EXIF directory for the Node.js parser
   private static readonly CHUNK_SIZE_LIMIT = 64 * 1024; 
 
   private static async generateHash(buffer: Uint8Array): Promise<string> {
@@ -38,7 +38,7 @@ export class StreamParser {
     const reader = response.body?.getReader();
     if (!reader) throw new Error("[FRP] No stream body");
 
-    const chunks: Uint8Array[] = [];
+    const chunks: Uint8Array[] =[];
     let receivedLength = 0;
     let exifFound = false;
     let c2paFound = false;

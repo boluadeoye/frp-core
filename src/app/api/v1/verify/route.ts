@@ -4,7 +4,8 @@ import { db } from '@/db';
 import { auditLedger } from '@/db/schema';
 import { ForensicAggregator } from '@/lib/frp/forensic-aggregator';
 
-export const runtime = 'edge';
+// REMOVED: export const runtime = 'edge';
+// This route now runs on Vercel's Heavyweight Node.js Serverless infrastructure.
 
 export async function POST(req: Request) {
   try {
@@ -17,7 +18,7 @@ export async function POST(req: Request) {
 
     const traceId = crypto.randomUUID();
 
-    // 1. Surgical Header Extraction & Hashing
+    // 1. Surgical Header Extraction (64KB)
     const headerData = await StreamParser.extractHeaders(imageUrl);
 
     // 2. Log to Ledger
@@ -30,7 +31,7 @@ export async function POST(req: Request) {
       forensicManifest: { preliminary: { exifDetected: headerData.exifFound } }
     });
 
-    // 3. Execute Weaponized Audit
+    // 3. Execute Weaponized Physics Audit
     await ForensicAggregator.processAudit(traceId, imageUrl, headerData.buffer, headerData.hash);
 
     return NextResponse.json({
