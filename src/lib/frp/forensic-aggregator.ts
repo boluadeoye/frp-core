@@ -19,90 +19,61 @@ export class ForensicAggregator {
 
   private static calculatePhysics(clientExif: any) {
     try {
-      if (!clientExif || !clientExif.latitude || !clientExif.longitude) {
-        return { error: "CLIENT_GPS_MISSING" };
-      }
+      if (!clientExif || !clientExif.latitude || !clientExif.longitude) return { error: "GPS_MISSING" };
       const lat = parseFloat(clientExif.latitude);
       const lon = parseFloat(clientExif.longitude);
       const timestamp = clientExif.timestamp ? new Date(clientExif.timestamp) : new Date();
       const sunPos = SunCalc.getPosition(timestamp, lat, lon);
-
       return {
         lat: lat.toFixed(4),
         lon: lon.toFixed(4),
         timestamp: timestamp.toISOString(),
         sunAzimuth: (sunPos.azimuth * 180 / Math.PI).toFixed(2),
         sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
-        iso: clientExif.iso || "Unknown",
-        exposureTime: clientExif.exposureTime || "Unknown"
+        iso: clientExif.iso || 0,
+        exposureTime: clientExif.exposureTime || "0"
       };
     } catch (e: any) {
-      return { error: `PHYSICS_CALC_FAILED: ${e.message}` };
+      return { error: "CALC_FAILED" };
     }
   }
 
-  /**
-   * Generates a Detached Cryptographic Signature (ECDSA) for the Audit.
-   */
   private static generateOracleSignature(traceId: string, hash: string, fcs: string): string {
     const privateKey = process.env.FRP_PRIVATE_KEY;
-    if (!privateKey) {
-      console.warn("[AGGREGATOR] FRP_PRIVATE_KEY not found. Skipping signature.");
-      return "UNSIGNED";
-    }
-    
+    if (!privateKey) return "UNSIGNED";
     const payload = `${traceId}:${hash}:${fcs}`;
     const sign = crypto.createSign('SHA256');
     sign.update(payload);
     sign.end();
-    
     return sign.sign(privateKey, 'base64');
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any) {
-    console.log(`[AGGREGATOR] Cryptographic Audit Started: ${traceId}`);
-
     try {
-      const burned = await db.query.burnRegistry.findFirst({
-        where: eq(burnRegistry.hash, headerHash)
-      });
-
-      if (burned) {
-        const signature = this.generateOracleSignature(traceId, headerHash, "0.000");
-        await db.update(auditLedger).set({
-          status: "flagged",
-          fcsScore: "0.000",
-          oracleSignature: signature,
-          forensicManifest: { reason: "Blacklisted Fingerprint" },
-          completedAt: new Date()
-        }).where(eq(auditLedger.requestId, traceId));
-        return;
+      const physics: any = this.calculatePhysics(clientExif);
+      
+      // DETERMINISTIC OVERRIDE: If Sun is below horizon but ISO is low, it's a lie.
+      let physicalLie = false;
+      if (physics.sunAltitude && parseFloat(physics.sunAltitude) < -2 && physics.iso < 400) {
+        physicalLie = true;
       }
 
-      const physics = this.calculatePhysics(clientExif);
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
-      const modelId = "llama-3.3-70b-versatile";
-      const aiBuffer = headerBuffer.slice(0, 4096);
-      const base64Sliver = this.toBase64Safe(aiBuffer);
-
+      const base64Sliver = this.toBase64Safe(headerBuffer.slice(0, 4096));
       const payload = {
-        model: modelId,
+        model: "llama-3.3-70b-versatile",
         messages:[
           {
             role: "system",
-            content: `You are a Forensic Physics Auditor. 
-            1. Analyze the Physics Context. Does the sun altitude match the ISO/Exposure?
-            2. Inspect the Header Sliver for 'Adobe', 'Photoshop', or 'Canva'.
-            Return ONLY JSON: {"confidence_score": 0.0-1.0, "analysis": "string"}`
+            content: "You are a Forensic Auditor. Analyze the physics and binary data. Return ONLY JSON: {\"confidence_score\": 0.0-1.0, \"analysis\": \"string\"}"
           },
           {
             role: "user",
-            content: `Physics Context: ${JSON.stringify(physics)}\nHeader Sliver (Base64): ${base64Sliver}`
+            content: `Physics: ${JSON.stringify(physics)}\nHeader: ${base64Sliver}`
           }
         ],
-        temperature: 0.1,
         response_format: { type: "json_object" }
       };
 
@@ -112,38 +83,28 @@ export class ForensicAggregator {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error(`GROQ_ERROR: ${response.status}`);
-
       const data = await response.json();
       const analysis = JSON.parse(data.choices[0].message.content);
-      const finalScore = analysis.confidence_score.toString();
+      
+      // ENFORCE DETERMINISM: If physics lie detected, force score to 0.1
+      let finalScore = parseFloat(analysis.confidence_score);
+      if (physicalLie) {
+        finalScore = 0.100;
+        analysis.analysis = "CRITICAL DISCREPANCY: " + analysis.analysis;
+      }
 
-      // Generate the Cryptographic Anchor
-      const signature = this.generateOracleSignature(traceId, headerHash, finalScore);
+      const signature = this.generateOracleSignature(traceId, headerHash, finalScore.toFixed(3));
 
-      await db.update(auditLedger)
-        .set({
-          status: analysis.confidence_score < 0.4 ? "flagged" : "verified",
-          fcsScore: finalScore,
-          headerHash: headerHash,
-          oracleSignature: signature,
-          forensicManifest: { 
-            visual: analysis.analysis, 
-            physics_report: physics,
-            model: modelId 
-          },
-          completedAt: new Date()
-        })
-        .where(eq(auditLedger.requestId, traceId));
-
-      console.log(`[AGGREGATOR] Success: ${traceId} - FCS: ${finalScore} - Signed: true`);
+      await db.update(auditLedger).set({
+        status: finalScore < 0.4 ? "flagged" : "verified",
+        fcsScore: finalScore.toFixed(3),
+        oracleSignature: signature,
+        forensicManifest: { visual: analysis.analysis, physics_report: physics },
+        completedAt: new Date()
+      }).where(eq(auditLedger.requestId, traceId));
 
     } catch (error: any) {
-      console.error(`[AGGREGATOR] Failure: ${error.message}`);
-      await db.update(auditLedger)
-        .set({ status: "failed", forensicManifest: { error: error.message } })
-        .where(eq(auditLedger.requestId, traceId))
-        .catch(() => {});
+      await db.update(auditLedger).set({ status: "failed" }).where(eq(auditLedger.requestId, traceId));
     }
   }
 }
