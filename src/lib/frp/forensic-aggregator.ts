@@ -7,6 +7,9 @@ import * as SunCalc from "suncalc";
 import exif from "exif-reader";
 
 export class ForensicAggregator {
+  /**
+   * Memory-safe Base64 encoder.
+   */
   private static toBase64Safe(buffer: Uint8Array): string {
     let binary = '';
     const chunkSize = 4096; 
@@ -19,6 +22,7 @@ export class ForensicAggregator {
 
   private static extractPhysicalContext(buffer: Uint8Array) {
     try {
+      // exif-reader uses the full 32KB buffer here
       const metadata = exif(Buffer.from(buffer) as any);
       const gps = metadata.gps;
       const exifData = metadata.exif;
@@ -48,7 +52,7 @@ export class ForensicAggregator {
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string) {
-    console.log(`[AGGREGATOR] Deep Audit Started: ${traceId}`);
+    console.log(`[AGGREGATOR] Starting Hybrid Audit: ${traceId}`);
 
     try {
       const burned = await db.query.burnRegistry.findFirst({
@@ -65,29 +69,35 @@ export class ForensicAggregator {
         return;
       }
 
+      // 1. Extract Physics using the FULL 32KB buffer
       const physics = this.extractPhysicalContext(headerBuffer);
+      
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
       const modelId = "llama-3.3-70b-versatile";
-      const base64Header = this.toBase64Safe(headerBuffer);
+      
+      // 2. SURGICAL SLIVER: Only send the first 4KB to the AI to avoid 413 error
+      const aiBuffer = headerBuffer.slice(0, 4096);
+      const base64Sliver = this.toBase64Safe(aiBuffer);
+      
+      console.log(`[AGGREGATOR] Physics Extracted. Sending 4KB sliver to AI.`);
 
       const payload = {
         model: modelId,
         messages:[
           {
             role: "system",
-            content: `You are a Forensic Auditor. Analyze the image header and physics context.
+            content: `You are a Forensic Auditor. Analyze the image header sliver and physics context.
             Physics: ${JSON.stringify(physics)}
             Task: 
-            1. If GPS is present, verify if ISO/Exposure match the sun altitude.
-            2. Inspect binary for 'Adobe', 'Photoshop', 'Canva'.
-            3. If GPS is missing, perform binary-only audit.
+            1. Verify if EXIF light settings match the sun altitude.
+            2. Inspect binary sliver for 'Adobe', 'Photoshop', 'Canva'.
             Return ONLY JSON: {"confidence_score": 0.0-1.0, "analysis": "string"}`
           },
           {
             role: "user",
-            content: `Header Bytes: ${base64Header}`
+            content: `Header Sliver (Base64): ${base64Sliver}`
           }
         ],
         temperature: 0.1,
@@ -100,11 +110,13 @@ export class ForensicAggregator {
         body: JSON.stringify(payload)
       });
 
-      if (!response.ok) throw new Error(`GROQ_ERROR: ${response.status}`);
+      if (!response.ok) {
+        const errText = await response.text();
+        throw new Error(`GROQ_ERROR: ${response.status} - ${errText.substring(0, 100)}`);
+      }
 
       const data = await response.json();
-      const resultText = data.choices[0].message.content;
-      const analysis = JSON.parse(resultText);
+      const analysis = JSON.parse(data.choices[0].message.content);
 
       await db.update(auditLedger)
         .set({
