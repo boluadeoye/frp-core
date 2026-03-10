@@ -26,22 +26,21 @@ const BlazingLogo = () => (
 
 export default function CommandDeck() {
   const router = useRouter();
-  const [loading, setLoading] = useState(false);
+  const[loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const[terminalLogs, setTerminalLogs] = useState<string[]>([]);
 
   const [imageUrl, setImageUrl] = useState("");
   const [lat, setLat] = useState("");
   const [lon, setLon] = useState("");
   const [timestamp, setTimestamp] = useState("");
-  const[iso, setIso] = useState("");
+  const [iso, setIso] = useState("");
   const [exposure, setExposure] = useState("");
 
   const addLog = (msg: string) => {
     setTerminalLogs(prev =>[...prev, `[${new Date().toISOString().split('T')[1].slice(0,-1)}] ${msg}`]);
   };
 
-  // --- NEW: CLIENT-SIDE EXIF EXTRACTION ---
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
@@ -50,14 +49,23 @@ export default function CommandDeck() {
     addLog(`ANALYZING LOCAL FILE: ${file.name}`);
     
     try {
-      // Extract EXIF locally in the browser
+      // Check if it's a screenshot or PNG (which rarely have EXIF)
+      if (file.type === 'image/png' || file.name.toLowerCase().includes('screenshot')) {
+        addLog("WARNING: PNGs and Screenshots typically lack EXIF data.");
+      }
+
+      // Attempt extraction with a timeout/fallback
       const metadata = await exifr.parse(file, {
         gps: true,
         exif: true,
         pick:['latitude', 'longitude', 'DateTimeOriginal', 'ISO', 'ExposureTime']
-      });
+      }).catch(() => null); // Catch the internal exifr crash
 
-      if (!metadata) throw new Error("No EXIF metadata found in this image.");
+      if (!metadata) {
+        setError("No EXIF metadata found. This is likely a screenshot or a stripped image.");
+        addLog("EXTRACTION FAILED: NO EXIF DIRECTORY FOUND.");
+        return;
+      }
 
       if (metadata.latitude && metadata.longitude) {
         setLat(metadata.latitude.toFixed(6));
@@ -75,13 +83,10 @@ export default function CommandDeck() {
       if (metadata.ISO) setIso(metadata.ISO.toString());
       if (metadata.ExposureTime) setExposure(metadata.ExposureTime.toString());
 
-      // We still need a URL for the server to fetch the binary sliver.
-      // In a full production app, we would upload this file to Supabase Storage first.
-      // For this demo, we alert the user to provide the public URL.
       addLog("LOCAL EXTRACTION COMPLETE. PLEASE PROVIDE PUBLIC URL FOR BINARY AUDIT.");
       
     } catch (err: any) {
-      setError(`Extraction Failed: ${err.message}`);
+      setError(`Extraction Failed: The file format is unsupported or corrupted.`);
       addLog(`EXTRACTION ERROR: ${err.message}`);
     }
   };
@@ -178,7 +183,6 @@ export default function CommandDeck() {
                 </button>
               </div>
 
-              {/* NEW: LOCAL FILE UPLOAD FOR AUTO-EXTRACTION */}
               <div className="mb-6 p-4 border border-dashed border-white/20 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] transition-colors relative cursor-pointer">
                 <input 
                   type="file" 
