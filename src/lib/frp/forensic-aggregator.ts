@@ -4,6 +4,7 @@ import { eq } from "drizzle-orm";
 import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
 import * as SunCalc from "suncalc";
+import crypto from "crypto";
 
 export class ForensicAggregator {
   private static toBase64Safe(buffer: Uint8Array): string {
@@ -16,19 +17,14 @@ export class ForensicAggregator {
     return btoa(binary);
   }
 
-  /**
-   * Calculates Physics based on Client-Provided EXIF data.
-   */
   private static calculatePhysics(clientExif: any) {
     try {
       if (!clientExif || !clientExif.latitude || !clientExif.longitude) {
         return { error: "CLIENT_GPS_MISSING" };
       }
-
       const lat = parseFloat(clientExif.latitude);
       const lon = parseFloat(clientExif.longitude);
       const timestamp = clientExif.timestamp ? new Date(clientExif.timestamp) : new Date();
-
       const sunPos = SunCalc.getPosition(timestamp, lat, lon);
 
       return {
@@ -45,8 +41,26 @@ export class ForensicAggregator {
     }
   }
 
+  /**
+   * Generates a Detached Cryptographic Signature (ECDSA) for the Audit.
+   */
+  private static generateOracleSignature(traceId: string, hash: string, fcs: string): string {
+    const privateKey = process.env.FRP_PRIVATE_KEY;
+    if (!privateKey) {
+      console.warn("[AGGREGATOR] FRP_PRIVATE_KEY not found. Skipping signature.");
+      return "UNSIGNED";
+    }
+    
+    const payload = `${traceId}:${hash}:${fcs}`;
+    const sign = crypto.createSign('SHA256');
+    sign.update(payload);
+    sign.end();
+    
+    return sign.sign(privateKey, 'base64');
+  }
+
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any) {
-    console.log(`[AGGREGATOR] Zero-Trust Physics Audit Started: ${traceId}`);
+    console.log(`[AGGREGATOR] Cryptographic Audit Started: ${traceId}`);
 
     try {
       const burned = await db.query.burnRegistry.findFirst({
@@ -54,19 +68,18 @@ export class ForensicAggregator {
       });
 
       if (burned) {
+        const signature = this.generateOracleSignature(traceId, headerHash, "0.000");
         await db.update(auditLedger).set({
           status: "flagged",
           fcsScore: "0.000",
+          oracleSignature: signature,
           forensicManifest: { reason: "Blacklisted Fingerprint" },
           completedAt: new Date()
         }).where(eq(auditLedger.requestId, traceId));
         return;
       }
 
-      // 1. Calculate Physics from Client Data
       const physics = this.calculatePhysics(clientExif);
-      console.log(`[AGGREGATOR] Physics Calculated:`, physics);
-      
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
@@ -80,8 +93,8 @@ export class ForensicAggregator {
           {
             role: "system",
             content: `You are a Forensic Physics Auditor. 
-            1. Analyze the Physics Context (calculated from client GPS). Does the sun altitude match the ISO/Exposure? (e.g., High altitude = bright day = low ISO).
-            2. Inspect the Header Sliver (Base64) for 'Adobe', 'Photoshop', or 'Canva'.
+            1. Analyze the Physics Context. Does the sun altitude match the ISO/Exposure?
+            2. Inspect the Header Sliver for 'Adobe', 'Photoshop', or 'Canva'.
             Return ONLY JSON: {"confidence_score": 0.0-1.0, "analysis": "string"}`
           },
           {
@@ -103,23 +116,27 @@ export class ForensicAggregator {
 
       const data = await response.json();
       const analysis = JSON.parse(data.choices[0].message.content);
+      const finalScore = analysis.confidence_score.toString();
+
+      // Generate the Cryptographic Anchor
+      const signature = this.generateOracleSignature(traceId, headerHash, finalScore);
 
       await db.update(auditLedger)
         .set({
           status: analysis.confidence_score < 0.4 ? "flagged" : "verified",
-          fcsScore: analysis.confidence_score.toString(),
+          fcsScore: finalScore,
           headerHash: headerHash,
+          oracleSignature: signature,
           forensicManifest: { 
             visual: analysis.analysis, 
             physics_report: physics,
-            client_exif_provided: !!clientExif,
             model: modelId 
           },
           completedAt: new Date()
         })
         .where(eq(auditLedger.requestId, traceId));
 
-      console.log(`[AGGREGATOR] Success: ${traceId} - FCS: ${analysis.confidence_score}`);
+      console.log(`[AGGREGATOR] Success: ${traceId} - FCS: ${finalScore} - Signed: true`);
 
     } catch (error: any) {
       console.error(`[AGGREGATOR] Failure: ${error.message}`);

@@ -15,6 +15,13 @@
       "when": 1773079330065,
       "tag": "0001_shiny_alex_power",
       "breakpoints": true
+    },
+    {
+      "idx": 2,
+      "version": "7",
+      "when": 1773147469655,
+      "tag": "0002_brainy_franklin_storm",
+      "breakpoints": true
     }
   ]
 }

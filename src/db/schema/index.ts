@@ -25,12 +25,12 @@ export const auditLedger = pgTable("audit_ledger", {
   startedAt: timestamp("started_at").defaultNow(),
   completedAt: timestamp("completed_at"),
   imageUrlRef: text("image_url_ref"),
-  headerHash: text("header_hash"), // SHA-256 of the forensic header
+  headerHash: text("header_hash"),
+  oracleSignature: text("oracle_signature"), // NEW: The Cryptographic Anchor
 });
 
-// THE BURN REGISTRY: Proprietary Data Moat
 export const burnRegistry = pgTable("burn_registry", {
-  hash: text("hash").primaryKey(), // SHA-256 of the header
+  hash: text("hash").primaryKey(),
   reason: text("reason").notNull(),
   flaggedAt: timestamp("flagged_at").defaultNow(),
   severity: numeric("severity", { precision: 3, scale: 2 }).default("1.00"),
