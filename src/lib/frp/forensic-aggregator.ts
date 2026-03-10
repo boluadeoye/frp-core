@@ -3,8 +3,6 @@ import { auditLedger, burnRegistry } from "@/db/schema";
 import { eq } from "drizzle-orm";
 import { KeyManager } from "./key-manager";
 import { EntropyRouter } from "./entropy";
-import * as SunCalc from "suncalc";
-import exifr from "exifr/dist/lite.esm.js";
 
 export class ForensicAggregator {
   private static toBase64Safe(buffer: Uint8Array): string {
@@ -17,41 +15,8 @@ export class ForensicAggregator {
     return btoa(binary);
   }
 
-  private static async extractPhysicalContext(buffer: Uint8Array) {
-    try {
-      // Using the Edge-safe ESM build of exifr
-      const metadata = await exifr.parse(buffer, {
-        gps: true,
-        exif: true,
-        pick: ['GPSLatitude', 'GPSLongitude', 'DateTimeOriginal', 'ISO', 'ExposureTime']
-      });
-
-      if (!metadata || !metadata.latitude || !metadata.longitude) {
-        return { error: "GPS_MISSING_IN_HEADER" };
-      }
-
-      const lat = metadata.latitude;
-      const lon = metadata.longitude;
-      const timestamp = metadata.DateTimeOriginal || new Date();
-
-      const sunPos = SunCalc.getPosition(new Date(timestamp), lat, lon);
-
-      return {
-        lat: lat.toFixed(4),
-        lon: lon.toFixed(4),
-        timestamp,
-        sunAzimuth: (sunPos.azimuth * 180 / Math.PI).toFixed(2),
-        sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
-        iso: metadata.ISO,
-        exposureTime: metadata.ExposureTime
-      };
-    } catch (e: any) {
-      return { error: `PARSE_FAILED: ${e.message}` };
-    }
-  }
-
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string) {
-    console.log(`[AGGREGATOR] Edge-Native Audit Started: ${traceId}`);
+    console.log(`[AGGREGATOR] AI-Native Physics Audit Started: ${traceId}`);
 
     try {
       const burned = await db.query.burnRegistry.findFirst({
@@ -68,13 +33,14 @@ export class ForensicAggregator {
         return;
       }
 
-      const physics = await this.extractPhysicalContext(headerBuffer);
-      
       const key = await KeyManager.getValidKey();
       if (!key) throw new Error("POOL_EMPTY");
 
       const modelId = "llama-3.3-70b-versatile";
-      const aiBuffer = headerBuffer.slice(0, 4096);
+      
+      // Send a 16KB sliver. This is enough for the AI to find the EXIF tags 
+      // without hitting the 413 Token Limit.
+      const aiBuffer = headerBuffer.slice(0, 16384);
       const base64Sliver = this.toBase64Safe(aiBuffer);
 
       const payload = {
@@ -82,12 +48,17 @@ export class ForensicAggregator {
         messages:[
           {
             role: "system",
-            content: `You are a Forensic Auditor. Analyze the image header sliver and physics context.
-            Physics: ${JSON.stringify(physics)}
-            Task: 
-            1. Verify if EXIF light settings match the sun altitude.
-            2. Inspect binary sliver for 'Adobe', 'Photoshop', 'Canva'.
-            Return ONLY JSON: {"confidence_score": 0.0-1.0, "analysis": "string"}`
+            content: `You are a Forensic Physics Auditor. Analyze the provided Base64 image header.
+            Task:
+            1. Extract the GPS Latitude, Longitude, and Timestamp from the EXIF data embedded in the Base64 string.
+            2. If GPS is found, estimate if the lighting conditions (ISO/Exposure) match an outdoor daytime shot.
+            3. Look for 'Adobe', 'Photoshop', or 'Canva' strings.
+            Return ONLY JSON: 
+            {
+              "confidence_score": 0.0-1.0, 
+              "analysis": "string",
+              "physics_report": { "gps_found": boolean, "details": "string" }
+            }`
           },
           {
             role: "user",
@@ -116,7 +87,7 @@ export class ForensicAggregator {
           headerHash: headerHash,
           forensicManifest: { 
             visual: analysis.analysis, 
-            physics_report: physics,
+            physics_report: analysis.physics_report,
             model: modelId 
           },
           completedAt: new Date()
