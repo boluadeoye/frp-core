@@ -1,6 +1,6 @@
 import { db } from "@/db";
 import { auditLedger } from "@/db/schema";
-import { eq } from "drizzle-orm";
+import { eq, or } from "drizzle-orm";
 import { notFound } from "next/navigation";
 import { ShieldCheck, ShieldAlert, Cpu, Sun, Hash, Key } from "lucide-react";
 
@@ -10,8 +10,13 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
   const resolvedParams = await params;
   const { traceId } = resolvedParams;
 
+  // Search by either the exact traceId OR the agentId for easier testing
   const audit = await db.query.auditLedger.findFirst({
-    where: eq(auditLedger.requestId, traceId),
+    where: or(
+      eq(auditLedger.requestId, traceId),
+      eq(auditLedger.agentId, traceId)
+    ),
+    orderBy: (auditLedger, { desc }) =>[desc(auditLedger.startedAt)],
   });
 
   if (!audit) return notFound();
@@ -33,7 +38,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
           </div>
           <div className="text-right">
             <p className="text-xs text-gray-500">TRACE ID</p>
-            <p className="text-sm text-gray-400">{traceId}</p>
+            <p className="text-sm text-gray-400">{audit.requestId}</p>
           </div>
         </header>
 
