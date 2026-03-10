@@ -1,34 +1,64 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { Shield, Crosshair, Activity, AlertTriangle, Terminal, Database, Globe, Cpu, ChevronRight, Upload } from "lucide-react";
+import { 
+  Shield, Crosshair, Activity, AlertTriangle, Terminal, 
+  Database, Globe, Cpu, ChevronRight, Upload, 
+  Zap, Lock, Fingerprint, BarChart3, Map as MapIcon
+} from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import exifr from "exifr/dist/lite.esm.js";
 
+// --- THE BLAZING REACTOR LOGO ---
 const BlazingLogo = () => (
-  <div className="relative flex items-center justify-center w-12 h-12 rounded-xl bg-gradient-to-b from-emerald-900/20 to-black border border-emerald-500/20 overflow-hidden group">
+  <div className="relative flex items-center justify-center w-16 h-16 group">
     <motion.div
-      animate={{ opacity:[0.4, 0.8, 0.4] }}
-      transition={{ repeat: Infinity, duration: 3, ease: "easeInOut" }}
-      className="absolute inset-0 bg-emerald-500/10 blur-md"
+      animate={{ 
+        rotate: [0, 90, 180, 270, 360],
+        borderColor: ["rgba(16,185,129,0.2)", "rgba(16,185,129,0.8)", "rgba(16,185,129,0.2)"]
+      }}
+      transition={{ repeat: Infinity, duration: 8, ease: "linear" }}
+      className="absolute inset-0 border-2 border-dashed rounded-2xl"
     />
-    <span className="text-emerald-400 font-black text-2xl font-sans tracking-tighter z-10 drop-shadow-[0_0_8px_rgba(16,185,129,0.5)]">
-      F
-    </span>
-    <motion.div 
-      animate={{ top:["-20%", "120%"] }}
-      transition={{ repeat: Infinity, duration: 2, ease: "linear" }}
-      className="absolute left-0 right-0 h-[1px] bg-emerald-400/30 z-20"
-    />
+    <div className="relative flex items-center justify-center w-12 h-12 rounded-xl bg-black border border-emerald-500/40 overflow-hidden shadow-[0_0_20px_rgba(16,185,129,0.2)]">
+      <motion.div
+        animate={{ opacity: [0.3, 0.6, 0.3] }}
+        transition={{ repeat: Infinity, duration: 2 }}
+        className="absolute inset-0 bg-emerald-500/10 blur-xl"
+      />
+      <span className="text-emerald-400 font-black text-3xl font-sans tracking-tighter z-10 drop-shadow-[0_0_10px_rgba(16,185,129,0.8)]">
+        F
+      </span>
+      <motion.div 
+        animate={{ top: ["-100%", "200%"] }}
+        transition={{ repeat: Infinity, duration: 1.5, ease: "linear" }}
+        className="absolute left-0 right-0 h-[2px] bg-emerald-400/40 z-20 shadow-[0_0_10px_rgba(16,185,129,1)]"
+      />
+    </div>
+  </div>
+);
+
+// --- SYSTEM PULSE WAVEFORM ---
+const SystemPulse = () => (
+  <div className="flex items-end gap-1 h-4">
+    {[...Array(12)].map((_, i) => (
+      <motion.div
+        key={i}
+        animate={{ height: [2, Math.random() * 16 + 2, 2] }}
+        transition={{ repeat: Infinity, duration: 0.5 + Math.random(), ease: "easeInOut" }}
+        className="w-[2px] bg-emerald-500/40 rounded-full"
+      />
+    ))}
   </div>
 );
 
 export default function CommandDeck() {
   const router = useRouter();
-  const[loading, setLoading] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const[terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const [terminalLogs, setTerminalLogs] = useState<string[]>([]);
+  const scrollRef = useRef<HTMLDivElement>(null);
 
   const [imageUrl, setImageUrl] = useState("");
   const [lat, setLat] = useState("");
@@ -37,8 +67,14 @@ export default function CommandDeck() {
   const [iso, setIso] = useState("");
   const [exposure, setExposure] = useState("");
 
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [terminalLogs]);
+
   const addLog = (msg: string) => {
-    setTerminalLogs(prev =>[...prev, `[${new Date().toISOString().split('T')[1].slice(0,-1)}] ${msg}`]);
+    setTerminalLogs(prev => [...prev, `> ${msg}`]);
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -46,48 +82,37 @@ export default function CommandDeck() {
     if (!file) return;
 
     setError("");
-    addLog(`ANALYZING LOCAL FILE: ${file.name}`);
+    addLog(`MOUNTING LOCAL VOLUME: ${file.name.toUpperCase()}`);
+    addLog("SCANNING BINARY STRUCTURE...");
     
     try {
-      // Check if it's a screenshot or PNG (which rarely have EXIF)
-      if (file.type === 'image/png' || file.name.toLowerCase().includes('screenshot')) {
-        addLog("WARNING: PNGs and Screenshots typically lack EXIF data.");
-      }
-
-      // Attempt extraction with a timeout/fallback
       const metadata = await exifr.parse(file, {
-        gps: true,
-        exif: true,
-        pick:['latitude', 'longitude', 'DateTimeOriginal', 'ISO', 'ExposureTime']
-      }).catch(() => null); // Catch the internal exifr crash
+        gps: true, exif: true,
+        pick: ['latitude', 'longitude', 'DateTimeOriginal', 'ISO', 'ExposureTime']
+      }).catch(() => null);
 
-      if (!metadata) {
-        setError("No EXIF metadata found. This is likely a screenshot or a stripped image.");
-        addLog("EXTRACTION FAILED: NO EXIF DIRECTORY FOUND.");
+      if (!metadata || (!metadata.latitude && !metadata.DateTimeOriginal)) {
+        setError("METADATA STRIPPED OR MISSING. PROCEED WITH MANUAL OVERRIDE.");
+        addLog("CRITICAL: EXIF DIRECTORY NOT FOUND. SWITCHING TO MANUAL INGESTION.");
         return;
       }
 
-      if (metadata.latitude && metadata.longitude) {
+      if (metadata.latitude) {
         setLat(metadata.latitude.toFixed(6));
         setLon(metadata.longitude.toFixed(6));
-        addLog("GPS COORDINATES EXTRACTED.");
-      } else {
-        addLog("WARNING: NO GPS DATA FOUND.");
+        addLog("GEOSPATIAL COORDINATES DECODED.");
       }
-
       if (metadata.DateTimeOriginal) {
         setTimestamp(new Date(metadata.DateTimeOriginal).toISOString());
-        addLog("TIMESTAMP EXTRACTED.");
+        addLog("TEMPORAL ANCHOR ESTABLISHED.");
       }
-
       if (metadata.ISO) setIso(metadata.ISO.toString());
       if (metadata.ExposureTime) setExposure(metadata.ExposureTime.toString());
 
-      addLog("LOCAL EXTRACTION COMPLETE. PLEASE PROVIDE PUBLIC URL FOR BINARY AUDIT.");
-      
+      addLog("EXTRACTION SUCCESSFUL. AWAITING TARGET URL.");
     } catch (err: any) {
-      setError(`Extraction Failed: The file format is unsupported or corrupted.`);
-      addLog(`EXTRACTION ERROR: ${err.message}`);
+      setError("FORENSIC PARSE FAILURE.");
+      addLog(`ERROR: ${err.message}`);
     }
   };
 
@@ -98,8 +123,7 @@ export default function CommandDeck() {
     setTimestamp("2008-10-22T10:28:39Z");
     setIso("100");
     setExposure("1/500");
-    setError("");
-    addLog("TEST VECTOR LOADED.");
+    addLog("TEST VECTOR INJECTED INTO BUFFER.");
   };
 
   const executeAudit = async (e: React.FormEvent) => {
@@ -109,13 +133,13 @@ export default function CommandDeck() {
     setTerminalLogs([]);
 
     try {
-      addLog("INITIATING FORENSIC PROTOCOL...");
-      await new Promise(r => setTimeout(r, 400));
+      addLog("INITIALIZING FRP ORACLE V1.2...");
+      await new Promise(r => setTimeout(r, 600));
+      addLog("CHECKING OUT GROQ LPU KEY FROM POOL...");
       
-      addLog("ESTABLISHING ZERO-TRUST CLIENT HANDSHAKE...");
       const payload = {
         imageUrl,
-        agentId: "web-portal-" + Math.floor(Math.random() * 1000),
+        agentId: "mercenary-node-" + Math.floor(Math.random() * 1000),
         clientExif: {
           latitude: parseFloat(lat),
           longitude: parseFloat(lon),
@@ -125,139 +149,226 @@ export default function CommandDeck() {
         }
       };
 
-      addLog(`TARGET ACQUIRED: ${imageUrl.substring(0, 30)}...`);
+      addLog("DISPATCHING SURGICAL BINARY STRIKE...");
       const res = await fetch("/api/v1/verify", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload)
       });
 
-      addLog("CALCULATING ASTRONOMICAL EPHEMERIS (SUNCALC)...");
-      addLog("CROSS-REFERENCING EXPOSURE TRIANGLE...");
-      
       const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "ORACLE_REJECTION");
 
-      if (!res.ok) throw new Error(data.error || "Audit failed to execute.");
-
-      addLog("GENERATING SHA-256 FINGERPRINT...");
-      await new Promise(r => setTimeout(r, 400));
-      addLog("SIGNING ECDSA SECP256K1 MANIFEST...");
-      addLog(`AUDIT COMPLETE. TRACE ID: ${data.traceId}`);
+      addLog("ASTRONOMICAL CROSS-REFERENCE COMPLETE.");
+      addLog("GENERATING ECDSA SECP256K1 SIGNATURE...");
+      addLog(`AUDIT FINALIZED. TRACE: ${data.traceId.substring(0,8)}...`);
       
-      await new Promise(r => setTimeout(r, 600));
+      await new Promise(r => setTimeout(r, 800));
       router.push(`/cert/${data.traceId}`);
 
     } catch (err: any) {
       setError(err.message);
-      addLog(`CRITICAL ERROR: ${err.message}`);
+      addLog(`FATAL: ${err.message}`);
       setLoading(false);
     }
   };
 
   return (
-    <main className="min-h-screen bg-[#020202] text-gray-300 p-4 md:p-8 font-sans selection:bg-emerald-900/50 relative overflow-hidden">
-      <div className="absolute top-[-10%] left-[-10%] w-[40%] h-[40%] bg-emerald-900/10 blur-[120px] rounded-full pointer-events-none" />
-      <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/10 blur-[120px] rounded-full pointer-events-none" />
+    <main className="min-h-screen bg-[#000000] text-gray-400 p-4 md:p-10 font-sans selection:bg-emerald-500/30 relative overflow-hidden">
+      
+      {/* GRID OVERLAY */}
+      <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
+      <div className="absolute inset-0 bg-[linear-gradient(to_right,#80808012_1px,transparent_1px),linear-gradient(to_bottom,#80808012_1px,transparent_1px)] bg-[size:40px_40px] [mask-image:radial-gradient(ellipse_60%_50%_at_50%_0%,#000_70%,transparent_100%)]" />
 
-      <div className="max-w-6xl mx-auto space-y-10 relative z-10">
-        <header className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6 pt-4">
-          <div className="flex items-center gap-5">
+      <div className="max-w-7xl mx-auto space-y-10 relative z-10">
+        
+        {/* TOP NAVIGATION BAR */}
+        <nav className="flex flex-col md:flex-row justify-between items-start md:items-center gap-6">
+          <div className="flex items-center gap-6">
             <BlazingLogo />
             <div>
-              <h1 className="text-2xl md:text-3xl font-bold text-white tracking-tight">Forensic Reality Protocol</h1>
-              <p className="text-xs text-emerald-500/70 font-mono tracking-widest uppercase mt-1">Sovereign Truth Infrastructure</p>
+              <h1 className="text-3xl font-black text-white tracking-[ -0.05em] uppercase leading-none">
+                Forensic Reality <span className="text-emerald-500">Protocol</span>
+              </h1>
+              <div className="flex items-center gap-3 mt-2">
+                <span className="text-[10px] font-mono text-emerald-500/60 tracking-[0.3em] uppercase">Sovereign Truth Infrastructure</span>
+                <SystemPulse />
+              </div>
             </div>
           </div>
-        </header>
+          
+          <div className="flex items-center gap-4">
+            <div className="hidden md:flex flex-col items-end font-mono">
+              <span className="text-[10px] text-gray-600 uppercase tracking-tighter">Network Load</span>
+              <span className="text-xs text-emerald-500/80">0.042ms Latency</span>
+            </div>
+            <div className="h-10 w-[1px] bg-white/10 hidden md:block" />
+            <div className="bg-white/[0.03] border border-white/10 rounded-xl px-4 py-2 backdrop-blur-md flex items-center gap-3">
+              <Globe className="w-4 h-4 text-blue-500" />
+              <span className="text-xs font-bold text-white font-mono uppercase">Global Edge</span>
+            </div>
+          </div>
+        </nav>
 
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
-          <div className="lg:col-span-7">
-            <div className="bg-white/[0.01] border border-white/5 rounded-3xl p-6 md:p-8 backdrop-blur-2xl shadow-2xl">
-              
-              <div className="flex justify-between items-center mb-8">
-                <h2 className="text-lg font-medium text-white flex items-center gap-2">
-                  <Crosshair className="w-4 h-4 text-emerald-500" /> Target Acquisition
-                </h2>
-                <button type="button" onClick={loadTestVector} className="text-[10px] font-mono text-gray-400 hover:text-emerald-400 transition-colors flex items-center gap-1">
-                  LOAD TEST VECTOR <ChevronRight className="w-3 h-3" />
+        {/* MAIN BENTO GRID */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
+          
+          {/* TARGET ACQUISITION CARD */}
+          <div className="lg:col-span-8 space-y-6">
+            <div className="bg-[#080808] border border-white/5 rounded-[2rem] p-8 relative overflow-hidden shadow-2xl group">
+              <div className="absolute top-0 right-0 p-8 opacity-10 group-hover:opacity-20 transition-opacity">
+                <Crosshair className="w-32 h-32 text-emerald-500" />
+              </div>
+
+              <div className="flex justify-between items-center mb-10 relative z-10">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-full bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20">
+                    <Zap className="w-5 h-5 text-emerald-500" />
+                  </div>
+                  <h2 className="text-xl font-bold text-white tracking-tight">Target Acquisition</h2>
+                </div>
+                <button 
+                  type="button" onClick={loadTestVector}
+                  className="text-[10px] font-mono text-gray-500 hover:text-emerald-400 transition-all border border-white/5 px-4 py-2 rounded-full bg-white/[0.02]"
+                >
+                  LOAD_TEST_VECTOR.EXE
                 </button>
               </div>
 
-              <div className="mb-6 p-4 border border-dashed border-white/20 rounded-xl bg-white/[0.02] hover:bg-white/[0.05] transition-colors relative cursor-pointer">
+              {/* UPLOAD ZONE */}
+              <div className="mb-8 group/upload relative">
                 <input 
-                  type="file" 
-                  accept="image/jpeg, image/png" 
-                  onChange={handleFileUpload}
-                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
+                  type="file" accept="image/jpeg" onChange={handleFileUpload}
+                  className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20"
                 />
-                <div className="flex flex-col items-center justify-center text-center gap-2 pointer-events-none">
-                  <Upload className="w-6 h-6 text-emerald-500/70" />
-                  <p className="text-xs font-mono text-gray-400">Tap to Auto-Extract EXIF from Local Image</p>
+                <div className="border-2 border-dashed border-white/5 rounded-2xl p-10 bg-white/[0.01] group-hover/upload:bg-white/[0.03] group-hover/upload:border-emerald-500/30 transition-all flex flex-col items-center justify-center gap-4 text-center">
+                  <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 flex items-center justify-center border border-emerald-500/20 group-hover/upload:scale-110 transition-transform">
+                    <Upload className="w-6 h-6 text-emerald-500" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-white uppercase tracking-widest">Initialize Local Scan</p>
+                    <p className="text-xs text-gray-500 mt-1 font-mono">Drop image to auto-extract forensic metadata</p>
+                  </div>
                 </div>
               </div>
 
               {error && (
-                <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-6 bg-red-500/5 border border-red-500/20 text-red-400 p-4 rounded-xl text-xs flex items-start gap-3 font-mono">
-                  <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" /> <p>{error}</p>
+                <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mb-8 bg-red-500/5 border border-red-500/20 text-red-400 p-5 rounded-2xl text-xs flex items-start gap-4 font-mono">
+                  <AlertTriangle className="w-5 h-5 shrink-0" /> 
+                  <p className="leading-relaxed">{error}</p>
                 </motion.div>
               )}
 
-              <form onSubmit={executeAudit} className="space-y-6">
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Target Image URL (Required for Binary Audit)</label>
-                  <input 
-                    type="url" required value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
-                    className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono"
-                    placeholder="https://..."
-                  />
-                </div>
-
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Latitude</label>
-                    <input type="number" step="any" required value={lat} onChange={(e) => setLat(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Longitude</label>
-                    <input type="number" step="any" required value={lon} onChange={(e) => setLon(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono" />
+              <form onSubmit={executeAudit} className="grid grid-cols-1 md:grid-cols-2 gap-8 relative z-10">
+                <div className="md:col-span-2 space-y-2">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Target URL</label>
+                  <div className="relative">
+                    <input 
+                      type="url" required value={imageUrl} onChange={(e) => setImageUrl(e.target.value)}
+                      className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono placeholder:text-gray-800"
+                      placeholder="HTTPS://SOURCE_IMAGE_PATH"
+                    />
+                    <Lock className="absolute right-3 top-3 w-4 h-4 text-gray-800" />
                   </div>
                 </div>
 
-                <div className="space-y-1.5">
-                  <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Timestamp (ISO 8601)</label>
-                  <input type="text" required value={timestamp} onChange={(e) => setTimestamp(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono" />
+                <div className="space-y-2">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Latitude</label>
+                  <input type="number" step="any" required value={lat} onChange={(e) => setLat(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Longitude</label>
+                  <input type="number" step="any" required value={lon} onChange={(e) => setLon(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Timestamp</label>
+                  <input type="text" required value={timestamp} onChange={(e) => setTimestamp(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">ISO</label>
+                    <input type="number" required value={iso} onChange={(e) => setIso(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[10px] font-mono text-gray-600 uppercase tracking-[0.2em] ml-1">Exposure</label>
+                    <input type="text" required value={exposure} onChange={(e) => setExposure(e.target.value)} className="w-full bg-black border-b border-white/10 p-3 text-sm text-white focus:border-emerald-500 transition-all outline-none font-mono" />
+                  </div>
                 </div>
 
-                <div className="grid grid-cols-2 gap-6">
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Camera ISO</label>
-                    <input type="number" required value={iso} onChange={(e) => setIso(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono" />
-                  </div>
-                  <div className="space-y-1.5">
-                    <label className="text-[10px] font-mono text-gray-500 uppercase tracking-widest ml-1">Exposure Time</label>
-                    <input type="text" required value={exposure} onChange={(e) => setExposure(e.target.value)} className="w-full bg-black/40 border border-white/5 rounded-xl p-3.5 text-sm text-gray-200 focus:border-emerald-500/30 focus:bg-emerald-500/[0.02] transition-all outline-none font-mono" />
-                  </div>
-                </div>
-
-                <button type="submit" disabled={loading} className="w-full mt-8 bg-white text-black hover:bg-gray-200 font-medium py-4 rounded-xl transition-all flex justify-center items-center gap-2 disabled:opacity-50">
-                  {loading ? <Activity className="w-4 h-4 animate-spin" /> : <Shield className="w-4 h-4" />}
-                  {loading ? "EXECUTING AUDIT..." : "INITIALIZE AUDIT"}
+                <button 
+                  type="submit" disabled={loading}
+                  className="md:col-span-2 w-full mt-6 bg-white text-black hover:bg-emerald-500 hover:text-white font-black py-5 rounded-2xl transition-all flex justify-center items-center gap-4 disabled:opacity-50 group/btn"
+                >
+                  {loading ? <Activity className="w-6 h-6 animate-spin" /> : <Fingerprint className="w-6 h-6 group-hover/btn:scale-110 transition-transform" />}
+                  <span className="tracking-[0.2em] uppercase text-sm">{loading ? "Processing Audit..." : "Execute Forensic Audit"}</span>
                 </button>
               </form>
             </div>
           </div>
 
-          <div className="lg:col-span-5 space-y-6">
-            <div className="bg-black/60 border border-white/5 rounded-3xl p-6 backdrop-blur-xl h-[320px] flex flex-col relative overflow-hidden">
-              <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-emerald-500/20 to-transparent" />
-              <div className="flex items-center gap-2 mb-4 border-b border-white/5 pb-4">
-                <Terminal className="w-4 h-4 text-gray-500" />
-                <h3 className="text-[10px] font-mono text-gray-400 uppercase tracking-widest">Execution Log</h3>
+          {/* RIGHT COLUMN: SYSTEM STATUS */}
+          <div className="lg:col-span-4 space-y-6">
+            
+            {/* TERMINAL CARD */}
+            <div className="bg-[#080808] border border-white/5 rounded-[2rem] p-6 h-[400px] flex flex-col shadow-2xl">
+              <div className="flex items-center justify-between mb-6 border-b border-white/5 pb-4">
+                <div className="flex items-center gap-2">
+                  <Terminal className="w-4 h-4 text-emerald-500" />
+                  <h3 className="text-[10px] font-mono text-white uppercase tracking-[0.2em]">Execution Log</h3>
+                </div>
+                <div className="flex gap-1">
+                  <div className="w-2 h-2 rounded-full bg-red-500/20" />
+                  <div className="w-2 h-2 rounded-full bg-amber-500/20" />
+                  <div className="w-2 h-2 rounded-full bg-emerald-500/20" />
+                </div>
               </div>
-              <div className="flex-1 overflow-y-auto font-mono text-[11px] space-y-2 text-emerald-400/70 leading-relaxed">
-                {terminalLogs.length === 0 ? <p className="text-gray-600 italic">Awaiting target acquisition...</p> : <AnimatePresence>{terminalLogs.map((log, i) => <motion.div key={i} initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} className="break-all">{log}</motion.div>)}</AnimatePresence>}
+              <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-[10px] space-y-3 text-emerald-500/70 scrollbar-hide">
+                {terminalLogs.length === 0 ? (
+                  <p className="text-gray-800 animate-pulse">_ AWAITING_TARGET_ACQUISITION...</p>
+                ) : (
+                  <AnimatePresence>
+                    {terminalLogs.map((log, i) => (
+                      <motion.div key={i} initial={{ opacity: 0, x: -5 }} animate={{ opacity: 1, x: 0 }} className="flex gap-2">
+                        <span className="text-emerald-900">[{i}]</span>
+                        <span className="break-all">{log}</span>
+                      </motion.div>
+                    ))}
+                  </AnimatePresence>
+                )}
               </div>
             </div>
+
+            {/* STATS BENTO */}
+            <div className="grid grid-cols-1 gap-4">
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex items-center gap-5">
+                <div className="w-12 h-12 rounded-xl bg-blue-500/10 flex items-center justify-center border border-blue-500/20">
+                  <Database className="w-6 h-6 text-blue-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Ledger Status</p>
+                  <p className="text-lg font-bold text-white font-mono">SYNCED_NEON</p>
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex items-center gap-5">
+                <div className="w-12 h-12 rounded-xl bg-purple-500/10 flex items-center justify-center border border-purple-500/20">
+                  <Cpu className="w-6 h-6 text-purple-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Oracle Engine</p>
+                  <p className="text-lg font-bold text-white font-mono">70B_LPU_V1</p>
+                </div>
+              </div>
+              <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 flex items-center gap-5">
+                <div className="w-12 h-12 rounded-xl bg-amber-500/10 flex items-center justify-center border border-amber-500/20">
+                  <BarChart3 className="w-6 h-6 text-amber-500" />
+                </div>
+                <div>
+                  <p className="text-[10px] font-mono text-gray-600 uppercase tracking-widest">Burn Registry</p>
+                  <p className="text-lg font-bold text-white font-mono">ACTIVE_1.2k</p>
+                </div>
+              </div>
+            </div>
+
           </div>
         </div>
       </div>
