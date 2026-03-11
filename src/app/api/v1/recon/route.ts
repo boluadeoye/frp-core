@@ -4,46 +4,57 @@ export const runtime = 'edge';
 
 export async function GET() {
   try {
-    // Target: Hivemapper Public API (Coverage Tiles)
-    // We use Vercel's Edge network to bypass mobile IP blocks
+    console.log("[RECON] Initiating Hivemapper Data Acquisition...");
+    
     const response = await fetch("https://api.hivemapper.com/public/v1/footprint?limit=10", {
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/121.0.0.0 Safari/537.36",
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
         "Accept": "application/json"
-      }
+      },
+      next: { revalidate: 0 } // Disable caching for fresh data
     });
 
     if (!response.ok) {
-      throw new Error(`Target WAF rejected proxy: ${response.status}`);
+      const errBody = await response.text();
+      console.error(`[RECON] Target Error: ${response.status} - ${errBody.substring(0, 100)}`);
+      return NextResponse.json({ error: `Target_Rejection: ${response.status}` }, { status: 502 });
     }
 
     const data = await response.json();
     
-    // Format the raw data into FRP Target Vectors
+    if (!data || !data.features || !Array.isArray(data.features)) {
+      console.error("[RECON] Schema Mismatch: 'features' array missing.");
+      return NextResponse.json({ error: "SCHEMA_MISMATCH", raw: data }, { status: 502 });
+    }
+
     const targets = data.features.map((feature: any) => {
-      const props = feature.properties;
-      const coords = feature.geometry.coordinates; //[longitude, latitude]
+      const props = feature.properties || {};
+      const geom = feature.geometry || {};
+      const coords = geom.coordinates || [0, 0];
       
       return {
-        targetId: props.id || crypto.randomUUID().substring(0,8),
+        targetId: props.id || Math.random().toString(36).substring(7),
         imageUrl: props.preview_url || null,
         clientExif: {
           latitude: coords[1],
           longitude: coords[0],
           timestamp: props.timestamp || new Date().toISOString(),
-          iso: 100, // Baseline assumption for testing
+          iso: 100,
           exposureTime: "1/500"
         }
       };
-    }).filter((t: any) => t.imageUrl !== null); // Only keep targets with images
+    }).filter((t: any) => t.imageUrl !== null);
+
+    console.log(`[RECON] Successfully mapped ${targets.length} targets.`);
 
     return NextResponse.json({ 
       status: "success", 
-      target_count: targets.length,
+      count: targets.length,
       targets 
     });
 
   } catch (error: any) {
+    console.error("[RECON] Fatal Proxy Crash:", error.message);
     return NextResponse.json({ error: error.message }, { status: 500 });
   }
 }
