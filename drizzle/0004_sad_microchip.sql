@@ -1,0 +1,1 @@
+ALTER TABLE "audit_ledger" ADD COLUMN "image_url_ref" text;

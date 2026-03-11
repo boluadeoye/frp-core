@@ -24,9 +24,29 @@ export const auditLedger = pgTable("audit_ledger", {
   isBilled: boolean("is_billed").default(false),
   startedAt: timestamp("started_at").defaultNow(),
   completedAt: timestamp("completed_at"),
-  imageUrlRef: text("image_url_ref"),
+  imageUrlRef: text("image_url_ref"), // RESTORED
   headerHash: text("header_hash"),
-  oracleSignature: text("oracle_signature"), // NEW: The Cryptographic Anchor
+  oracleSignature: text("oracle_signature"),
+});
+
+// FLAG B: CHAIN OF CUSTODY
+export const auditTrail = pgTable("audit_trail", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  requestId: text("request_id").notNull(),
+  step: text("step").notNull(), 
+  actor: text("actor").notNull(), 
+  data: jsonb("data"),
+  timestamp: timestamp("timestamp").defaultNow(),
+});
+
+// FLAG D: CALIBRATION REGISTRY
+export const calibrationLogs = pgTable("calibration_logs", {
+  id: uuid("id").primaryKey().defaultRandom(),
+  testName: text("test_name").notNull(),
+  expectedResult: text("expected_result").notNull(),
+  actualResult: text("actual_result").notNull(),
+  witnessId: text("witness_id").default("SYSTEM_SELF_TEST"),
+  timestamp: timestamp("timestamp").defaultNow(),
 });
 
 export const burnRegistry = pgTable("burn_registry", {
