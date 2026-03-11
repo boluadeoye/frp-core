@@ -32,7 +32,15 @@ export class ForensicAggregator {
       if (!clientExif?.latitude) return { error: "GPS_MISSING" };
       const lat = parseFloat(clientExif.latitude);
       const lon = parseFloat(clientExif.longitude);
-      const timestamp = clientExif.timestamp ? new Date(clientExif.timestamp) : new Date();
+      
+      // Robust Date Parsing
+      let timestamp = new Date();
+      if (clientExif.timestamp) {
+        const parsedDate = new Date(clientExif.timestamp);
+        if (!isNaN(parsedDate.getTime())) {
+          timestamp = parsedDate;
+        }
+      }
       
       const sunPos = SunCalc.getPosition(timestamp, lat, lon);
       
@@ -44,8 +52,9 @@ export class ForensicAggregator {
         lon: lon.toFixed(4),
         sunAltitude: (sunPos.altitude * 180 / Math.PI).toFixed(2),
         sunAzimuth: azimuthDeg.toFixed(2),
-        iso: clientExif.iso || 0,
-        exposure: clientExif.exposureTime || "0",
+        iso: clientExif.iso ? parseInt(clientExif.iso) : 0,
+        exposure: clientExif.exposureTime || "Unknown",
+        timestamp: timestamp.toISOString(),
         physics_source: "SUNCALC_V1.9" 
       };
     } catch (e: any) {
