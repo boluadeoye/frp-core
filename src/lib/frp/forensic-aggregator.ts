@@ -33,7 +33,6 @@ export class ForensicAggregator {
       const lat = parseFloat(clientExif.latitude);
       const lon = parseFloat(clientExif.longitude);
       
-      // Robust Date Parsing
       let timestamp = new Date();
       if (clientExif.timestamp) {
         const parsedDate = new Date(clientExif.timestamp);
@@ -99,19 +98,16 @@ export class ForensicAggregator {
       const physics: any = this.calculatePhysics(clientExif);
       await this.logStep(traceId, "PHYSICS_CALC", "SUNCALC_ENGINE", physics);
 
-      // FULL SPECTRUM DETERMINISTIC OVERRIDE
       let physicalLie = false;
       let lieReason = "";
       const alt = parseFloat(physics.sunAltitude);
       const iso = parseInt(physics.iso);
 
       if (!isNaN(alt) && !isNaN(iso)) {
-        // Scenario 1: Nighttime GPS + Daylight ISO (e.g., Sun < -2, ISO < 400)
         if (alt < -2 && iso > 0 && iso < 400) {
           physicalLie = true;
           lieReason = "PHYSICS_ALTITUDE_INVALID_NIGHT";
         }
-        // Scenario 2: Daylight GPS + Nighttime ISO (e.g., Sun > 20, ISO > 1600)
         else if (alt > 20 && iso > 1600) {
           physicalLie = true;
           lieReason = "PHYSICS_ALTITUDE_INVALID_DAY";
@@ -131,7 +127,8 @@ export class ForensicAggregator {
           {
             "confidence_score": <float>,
             "reasoning_code": "PASS_CLEAN | ERR_PHYSICS_MISMATCH | ERR_CLIENT_LIE",
-            "supporting_codes":["EXIF_CONSISTENT", "PHYSICS_ALTITUDE_VALID", "ISO_EXPOSURE_NOMINAL", "ADOBE_MARKER_FOUND"]
+            "supporting_codes":["EXIF_CONSISTENT", "PHYSICS_ALTITUDE_VALID", "ISO_EXPOSURE_NOMINAL", "ADOBE_MARKER_FOUND"],
+            "analysis": "<Strict, factual 1-sentence summary of binary findings>"
           }`
         }, {
           role: "user",
@@ -154,12 +151,14 @@ export class ForensicAggregator {
       let finalScore = parseFloat(analysis.confidence_score);
       let finalCode = analysis.reasoning_code;
       let supportingCodes = analysis.supporting_codes ||[];
+      // FLAG VII FIX: Ensure analysis string is never null
+      let finalAnalysis = analysis.analysis || "ERR_BINARY_INSUFFICIENT_DATA: The cognitive plane could not extract a definitive binary signature from the provided sliver.";
 
-      // ENFORCE THE OVERRIDE
       if (physicalLie) {
         finalScore = 0.050;
         finalCode = "ERR_PHYSICS_MISMATCH";
         supportingCodes = [lieReason, "ISO_EXPOSURE_ANOMALY"];
+        finalAnalysis = `CRITICAL PHYSICAL DISCREPANCY: ${finalAnalysis}`;
       }
 
       const fullManifestData = {
@@ -186,6 +185,7 @@ export class ForensicAggregator {
         oracleSignature: signature,
         forensicManifest: { 
           ...fullManifestData,
+          visual: finalAnalysis, // Store the guaranteed string
           manifest_hash: manifestHash,
           override: physicalLie
         },

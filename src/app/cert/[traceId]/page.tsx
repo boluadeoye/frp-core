@@ -15,7 +15,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
       eq(auditLedger.requestId, traceId),
       eq(auditLedger.agentId, traceId)
     ),
-    orderBy: (auditLedger, { desc }) => [desc(auditLedger.startedAt)],
+    orderBy: (auditLedger, { desc }) =>[desc(auditLedger.startedAt)],
   });
 
   if (!audit) return notFound();
@@ -24,17 +24,18 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
   const fcsScore = parseFloat(audit.fcsScore || "0");
   const manifest = audit.forensicManifest as any;
   const physics = manifest?.physics_report;
+  
+  // FLAG VII FIX: Explicit error rendering
+  const binaryAnalysis = manifest?.visual || "ERR_BINARY_INSUFFICIENT_DATA: The cognitive plane could not extract a definitive binary signature from the provided sliver.";
 
   return (
     <main className="min-h-screen bg-[#020202] text-gray-300 p-4 md:p-8 font-sans selection:bg-emerald-900/50 relative overflow-hidden">
       
-      {/* Ambient Background Glow based on Verdict */}
       <div className={`absolute top-[-10%] left-[-10%] w-[40%] h-[40%] blur-[120px] rounded-full pointer-events-none ${isVerified ? 'bg-emerald-900/10' : 'bg-red-900/10'}`} />
       <div className="absolute bottom-[-10%] right-[-10%] w-[40%] h-[40%] bg-blue-900/5 blur-[120px] rounded-full pointer-events-none" />
 
       <div className="max-w-4xl mx-auto space-y-8 relative z-10">
         
-        {/* PREMIUM HEADER */}
         <header className="flex flex-col md:flex-row justify-between items-start md:items-end gap-4 border-b border-white/10 pb-6 pt-4">
           <div>
             <h1 className="text-3xl font-black text-white tracking-tighter uppercase">FRP // ORACLE</h1>
@@ -46,7 +47,6 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
           </div>
         </header>
 
-        {/* THE VERDICT (HERO SECTION) */}
         <section className={`p-8 rounded-3xl border backdrop-blur-xl flex flex-col md:flex-row items-center gap-8 ${isVerified ? 'bg-emerald-950/10 border-emerald-500/20 shadow-[0_0_30px_rgba(16,185,129,0.05)]' : 'bg-red-950/10 border-red-500/20 shadow-[0_0_30px_rgba(239,68,68,0.05)]'}`}>
           <div className={`p-4 rounded-full ${isVerified ? 'bg-emerald-500/10' : 'bg-red-500/10'}`}>
             {isVerified ? <ShieldCheck className="w-16 h-16 text-emerald-500" /> : <ShieldAlert className="w-16 h-16 text-red-500" />}
@@ -64,10 +64,8 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
           </div>
         </section>
 
-        {/* THE EVIDENCE GRID */}
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           
-          {/* PHYSICS ENGINE */}
           <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
               <Sun className="w-5 h-5 text-amber-500" />
@@ -81,7 +79,7 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
                 </li>
                 <li className="flex justify-between items-center border-b border-white/5 pb-2">
                   <span className="text-gray-500 text-xs">CLAIMED TIME</span> 
-                  <span className="text-gray-300">{new Date(physics.timestamp).toLocaleString()}</span>
+                  <span className="text-gray-300">{physics.timestamp !== "Invalid Date" ? new Date(physics.timestamp).toLocaleString() : "Invalid Date"}</span>
                 </li>
                 <li className="flex justify-between items-center border-b border-white/5 pb-2">
                   <span className="text-gray-500 text-xs">SUN ALTITUDE</span> 
@@ -101,19 +99,17 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
             )}
           </div>
 
-          {/* BINARY FORENSICS */}
           <div className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 backdrop-blur-sm">
             <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
               <Cpu className="w-5 h-5 text-blue-500" />
               <h3 className="text-sm font-bold text-white uppercase tracking-widest">Binary Inspection</h3>
             </div>
-            <p className="text-xs font-mono leading-relaxed text-gray-400 bg-black/40 p-4 rounded-xl border border-white/5">
-              {manifest?.visual || "No binary analysis available."}
+            <p className={`text-xs font-mono leading-relaxed p-4 rounded-xl border ${binaryAnalysis.includes('ERR_') ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-gray-400 bg-black/40 border-white/5'}`}>
+              {binaryAnalysis}
             </p>
           </div>
         </div>
 
-        {/* CRYPTOGRAPHIC ANCHOR */}
         <section className="bg-white/[0.02] border border-white/5 rounded-2xl p-6 backdrop-blur-sm">
           <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
             <Key className="w-5 h-5 text-purple-500" />
@@ -131,7 +127,6 @@ export default async function CertificatePage({ params }: { params: Promise<{ tr
           </div>
         </section>
 
-        {/* FOOTER */}
         <footer className="text-center pt-12 pb-8">
           <div className="inline-flex items-center gap-2 bg-white/5 px-4 py-2 rounded-full border border-white/10 mb-4">
             <Globe className="w-3 h-3 text-gray-400" />
