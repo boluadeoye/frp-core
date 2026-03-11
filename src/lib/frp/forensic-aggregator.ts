@@ -36,7 +36,6 @@ export class ForensicAggregator {
       
       const sunPos = SunCalc.getPosition(timestamp, lat, lon);
       
-      // FLAG I FIX: Normalize Azimuth to 0-360 compass bearing
       let azimuthDeg = sunPos.azimuth * 180 / Math.PI;
       azimuthDeg = ((azimuthDeg % 360) + 360) % 360;
       
@@ -47,7 +46,6 @@ export class ForensicAggregator {
         sunAzimuth: azimuthDeg.toFixed(2),
         iso: clientExif.iso || 0,
         exposure: clientExif.exposureTime || "0",
-        // FLAG II FIX: Clean source declaration, no "PENDING" liabilities
         physics_source: "SUNCALC_V1.9" 
       };
     } catch (e: any) {
@@ -55,18 +53,44 @@ export class ForensicAggregator {
     }
   }
 
-  private static generateOracleSignature(traceId: string, hash: string, fcs: string): string {
+  /**
+   * FLAG VI FIX: The "Super Hash" Signature
+   * We now hash the entire audit manifest (Image Hash + Physics + AI Reasoning) 
+   * before signing, ensuring the entire chain of custody is cryptographically anchored.
+   */
+  private static generateOracleSignature(traceId: string, fullManifest: any): { signature: string, manifestHash: string } {
     const privateKey = process.env.FRP_PRIVATE_KEY;
-    if (!privateKey) return "UNSIGNED";
-    const payload = `${traceId}:${hash}:${fcs}`;
+    
+    // 1. Create a deterministic string representation of the entire audit
+    const manifestString = JSON.stringify({
+      traceId,
+      headerHash: fullManifest.headerHash,
+      physics: fullManifest.physics_report,
+      cognitive: {
+        score: fullManifest.fcsScore,
+        code: fullManifest.reasoning_code,
+        supporting: fullManifest.supporting_codes
+      }
+    });
+
+    // 2. Generate the SHA-256 "Super Hash" of the manifest
+    const manifestHash = crypto.createHash('sha256').update(manifestString).digest('hex');
+
+    if (!privateKey) return { signature: "UNSIGNED", manifestHash };
+    
+    // 3. Sign the Super Hash
     const sign = crypto.createSign('SHA256');
-    sign.update(payload);
+    sign.update(manifestHash);
     sign.end();
-    return sign.sign(privateKey, 'base64');
+    
+    return { 
+      signature: sign.sign(privateKey, 'base64'),
+      manifestHash 
+    };
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any) {
-    console.log(`[AGGREGATOR] Final Hardened Audit: ${traceId}`);
+    console.log(`[AGGREGATOR] Enterprise Audit: ${traceId}`);
     
     await this.logStep(traceId, "INGESTION", "FRP_EDGE_WORKER", { imageUrl, headerHash });
 
@@ -84,7 +108,6 @@ export class ForensicAggregator {
 
       const base64Sliver = this.toBase64Safe(headerBuffer.slice(0, 4096));
 
-      // FLAG IV FIX: Remove free-text prose. Force enumerated supporting_codes.
       const payload = {
         model: "llama-3.3-70b-versatile",
         messages:[{
@@ -122,12 +145,21 @@ export class ForensicAggregator {
         analysis.supporting_codes =["PHYSICS_ALTITUDE_INVALID", "ISO_EXPOSURE_ANOMALY"];
       }
 
-      const signature = this.generateOracleSignature(traceId, headerHash, finalScore.toFixed(3));
+      // FLAG VI FIX: Construct the full manifest object for signing
+      const fullManifestData = {
+        headerHash,
+        physics_report: physics,
+        fcsScore: finalScore.toFixed(3),
+        reasoning_code: finalCode,
+        supporting_codes: analysis.supporting_codes
+      };
+
+      // Generate the Super Hash and Signature
+      const { signature, manifestHash } = this.generateOracleSignature(traceId, fullManifestData);
       
-      // FLAG III FIX: Complete Signing Record
       await this.logStep(traceId, "SIGNING", "FRP_ORACLE_KMS", { 
         signature_type: "ECDSA_SECP256K1",
-        manifest_hash: headerHash,
+        manifest_hash: manifestHash, // Now the hash of the ENTIRE audit
         signature_der: signature,
         public_key_id: "frp-oracle-v1",
         signing_timestamp_rfc3161: new Date().toISOString()
@@ -138,9 +170,8 @@ export class ForensicAggregator {
         fcsScore: finalScore.toFixed(3),
         oracleSignature: signature,
         forensicManifest: { 
-          reasoning_code: finalCode,
-          supporting_codes: analysis.supporting_codes,
-          physics_report: physics,
+          ...fullManifestData,
+          manifest_hash: manifestHash, // Store the Super Hash in the ledger
           override: physicalLie
         },
         completedAt: new Date()
