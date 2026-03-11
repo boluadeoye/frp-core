@@ -1,60 +1,74 @@
 import { NextResponse } from 'next/server';
 
-export const runtime = 'edge';
+// REMOVED: export const runtime = 'edge';
+// We are now using the Node.js Serverless Runtime for full network authority.
 
 export async function GET() {
+  const startTime = Date.now();
+  console.log("[RECON] INITIALIZING DEEP SCAN: HIVEMAPPER_NETWORK...");
+
   try {
-    console.log("[RECON] Initiating Hivemapper Data Acquisition...");
+    // Target the Map-Backend (Permissive Public Feed)
+    const targetUrl = "https://map-backend.hivemapper.com/footprint?limit=15&zoom=12";
     
-    const response = await fetch("https://api.hivemapper.com/public/v1/footprint?limit=10", {
+    const response = await fetch(targetUrl, {
+      method: 'GET',
       headers: {
-        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
-        "Accept": "application/json"
+        "User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/122.0.0.0 Safari/537.36",
+        "Accept": "application/json",
+        "Referer": "https://hivemapper.com/explorer",
+        "Origin": "https://hivemapper.com"
       },
-      next: { revalidate: 0 } // Disable caching for fresh data
+      cache: 'no-store'
     });
 
     if (!response.ok) {
-      const errBody = await response.text();
-      console.error(`[RECON] Target Error: ${response.status} - ${errBody.substring(0, 100)}`);
-      return NextResponse.json({ error: `Target_Rejection: ${response.status}` }, { status: 502 });
+      const errorText = await response.text();
+      console.error(`[RECON] NETWORK_REJECTION: ${response.status}`);
+      return NextResponse.json({ 
+        error: "TARGET_ACCESS_DENIED", 
+        status: response.status,
+        details: errorText.substring(0, 50)
+      }, { status: 502 });
     }
 
     const data = await response.json();
     
-    if (!data || !data.features || !Array.isArray(data.features)) {
-      console.error("[RECON] Schema Mismatch: 'features' array missing.");
-      return NextResponse.json({ error: "SCHEMA_MISMATCH", raw: data }, { status: 502 });
-    }
+    // Sophisticated Data Extraction
+    const targets = data.features
+      .filter((f: any) => f.properties && f.properties.preview_url)
+      .map((feature: any) => {
+        const p = feature.properties;
+        const c = feature.geometry.coordinates;
+        
+        return {
+          id: p.id || Math.random().toString(36).substring(7),
+          image: p.preview_url,
+          metadata: {
+            lat: c[1],
+            lon: c[0],
+            time: p.timestamp || new Date().toISOString(),
+            iso: 100, // Baseline for the strike
+            exp: "1/500"
+          }
+        };
+      });
 
-    const targets = data.features.map((feature: any) => {
-      const props = feature.properties || {};
-      const geom = feature.geometry || {};
-      const coords = geom.coordinates || [0, 0];
-      
-      return {
-        targetId: props.id || Math.random().toString(36).substring(7),
-        imageUrl: props.preview_url || null,
-        clientExif: {
-          latitude: coords[1],
-          longitude: coords[0],
-          timestamp: props.timestamp || new Date().toISOString(),
-          iso: 100,
-          exposureTime: "1/500"
-        }
-      };
-    }).filter((t: any) => t.imageUrl !== null);
+    const latency = Date.now() - startTime;
+    console.log(`[RECON] SCAN_COMPLETE. LATENCY: ${latency}ms. TARGETS_ACQUIRED: ${targets.length}`);
 
-    console.log(`[RECON] Successfully mapped ${targets.length} targets.`);
-
-    return NextResponse.json({ 
-      status: "success", 
-      count: targets.length,
-      targets 
+    return NextResponse.json({
+      status: "ACTIVE",
+      network: "HIVEMAPPER_SOLANA",
+      scan_latency: `${latency}ms`,
+      payload: targets
     });
 
   } catch (error: any) {
-    console.error("[RECON] Fatal Proxy Crash:", error.message);
-    return NextResponse.json({ error: error.message }, { status: 500 });
+    console.error("[RECON] FATAL_EXCEPTION:", error.message);
+    return NextResponse.json({ 
+      error: "INTERNAL_PROXY_FAILURE", 
+      message: error.message 
+    }, { status: 500 });
   }
 }
