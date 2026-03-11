@@ -1,0 +1,14 @@
+{
+  "issuer": "Forensic Reality Protocol",
+  "architect": "Bolu Adeoye",
+  "public_key": {
+    "alg": "ECDSA",
+    "crv": "secp256k1",
+    "kty": "EC",
+    "use": "sig",
+    "value": "[PASTE_YOUR_PUBLIC_KEY_HERE]"
+  },
+  "version": "1.2",
+  "status": "SOVEREIGN_ACTIVE",
+  "timestamp": "2026-03-11T00:00:00Z"
+}
