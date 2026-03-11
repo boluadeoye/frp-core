@@ -6,18 +6,51 @@ import {
   Shield, Crosshair, Activity, AlertTriangle, Terminal, 
   Database, Globe, Cpu, ChevronRight, Upload, 
   Zap, Lock, Fingerprint, BarChart3, Scan, Radio,
-  Target, Flame, Search, Box
+  Target, Search, Box
 } from "lucide-react";
 import { motion, AnimatePresence } from "framer-motion";
 import exifr from "exifr/dist/lite.esm.js";
 
+// --- THE BLAZING SINGULARITY LOGO ---
 const BlazingLogo = () => (
   <div className="relative flex items-center justify-center w-16 h-16">
-    <motion.div animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 15, ease: "linear" }} className="absolute inset-0 border border-emerald-500/20 rounded-full" />
-    <motion.div animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.4, 0.2] }} transition={{ repeat: Infinity, duration: 3 }} className="absolute inset-0 bg-emerald-500/5 blur-2xl rounded-full" />
+    <motion.div 
+      animate={{ rotate: 360 }} 
+      transition={{ repeat: Infinity, duration: 15, ease: "linear" }} 
+      className="absolute inset-0 border border-emerald-500/20 rounded-full" 
+    />
+    <motion.div 
+      animate={{ scale: [1, 1.1, 1], opacity: [0.2, 0.4, 0.2] }} 
+      transition={{ repeat: Infinity, duration: 3 }} 
+      className="absolute inset-0 bg-emerald-500/5 blur-2xl rounded-full" 
+    />
     <div className="relative flex items-center justify-center w-12 h-12 rounded-2xl bg-black border border-emerald-500/40 overflow-hidden shadow-[0_0_30px_rgba(16,185,129,0.2)]">
       <span className="text-emerald-400 font-black text-3xl font-sans tracking-tighter z-10">F</span>
-      <motion.div animate={{ top: ["-100%", "200%"] }} transition={{ repeat: Infinity, duration: 1, ease: "linear" }} className="absolute left-0 right-0 h-[2px] bg-emerald-400/60 z-20 shadow-[0_0_15px_rgba(16,185,129,1)]" />
+      <motion.div 
+        animate={{ top: ["-100%", "200%"] }} 
+        transition={{ repeat: Infinity, duration: 1, ease: "linear" }} 
+        className="absolute left-0 right-0 h-[2px] bg-emerald-400/60 z-20 shadow-[0_0_15px_rgba(16,185,129,1)]" 
+      />
+    </div>
+  </div>
+);
+
+// --- HUD INPUT COMPONENT (FIXED: RESTORED DEFINITION) ---
+const HUDInput = ({ label, value, onChange, type = "text", placeholder = "", icon: Icon }: any) => (
+  <div className="relative group">
+    <label className="text-[9px] font-mono text-gray-600 uppercase tracking-[0.3em] mb-1 block ml-1 group-focus-within:text-emerald-500 transition-colors">
+      {label}
+    </label>
+    <div className="relative flex items-center">
+      <input 
+        type={type}
+        value={value}
+        onChange={onChange}
+        required
+        placeholder={placeholder}
+        className="w-full bg-transparent border-b border-white/5 py-2 text-sm text-white focus:border-emerald-500/50 transition-all outline-none font-mono placeholder:text-gray-800"
+      />
+      {Icon && <Icon className="absolute right-0 w-3 h-3 text-gray-700 group-focus-within:text-emerald-500/50 transition-colors" />}
     </div>
   </div>
 );
@@ -38,9 +71,14 @@ export default function CommandDeck() {
   const [iso, setIso] = useState("");
   const [exposure, setExposure] = useState("");
 
+  useEffect(() => {
+    if (scrollRef.current) {
+      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+    }
+  }, [terminalLogs]);
+
   const addLog = (msg: string) => setTerminalLogs(prev => [...prev, msg.toUpperCase()]);
 
-  // --- RECONNAISSANCE ENGINE ---
   const runRecon = async () => {
     setReconLoading(true);
     addLog("INITIATING_ON-CHAIN_RECON...");
@@ -67,6 +105,25 @@ export default function CommandDeck() {
     addLog(`TARGET_LOCKED: ${target.id}`);
   };
 
+  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    addLog(`SCANNING_LOCAL_NODE: ${file.name}`);
+    try {
+      const metadata = await exifr.parse(file, { gps: true, exif: true }).catch(() => null);
+      if (!metadata) {
+        setError("FORENSIC_GAP: METADATA_STRIPPED.");
+        return;
+      }
+      if (metadata.latitude) setLat(metadata.latitude.toFixed(6));
+      if (metadata.longitude) setLon(metadata.longitude.toFixed(6));
+      if (metadata.DateTimeOriginal) setTimestamp(new Date(metadata.DateTimeOriginal).toISOString());
+      if (metadata.ISO) setIso(metadata.ISO.toString());
+      if (metadata.ExposureTime) setExposure(metadata.ExposureTime.toString());
+      addLog("DNA_EXTRACTION_SUCCESS.");
+    } catch (err) { setError("SYSTEM_ERROR: PARSE_FAILURE."); }
+  };
+
   const executeAudit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -89,7 +146,6 @@ export default function CommandDeck() {
       
       <div className="max-w-7xl mx-auto space-y-12 relative z-10">
         
-        {/* HEADER */}
         <header className="flex justify-between items-center border-b border-white/5 pb-8">
           <div className="flex items-center gap-8">
             <BlazingLogo />
@@ -110,7 +166,6 @@ export default function CommandDeck() {
 
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-10">
           
-          {/* LEFT: RECON FEED */}
           <div className="lg:col-span-4 space-y-6">
             <div className="bg-[#050505] border border-white/5 rounded-[2.5rem] p-8 h-[600px] flex flex-col shadow-2xl relative overflow-hidden">
               <div className="flex items-center justify-between mb-8 border-b border-white/5 pb-5">
@@ -152,7 +207,6 @@ export default function CommandDeck() {
             </div>
           </div>
 
-          {/* CENTER: STRIKE ENGINE */}
           <div className="lg:col-span-5">
             <div className="bg-gradient-to-br from-[#0a0a0a] to-[#050505] border border-white/10 rounded-[2.5rem] p-10 shadow-2xl relative">
               <div className="flex items-center gap-4 mb-10">
@@ -160,6 +214,14 @@ export default function CommandDeck() {
                   <Crosshair className="w-6 h-6 text-emerald-500" />
                 </div>
                 <h2 className="text-2xl font-bold text-white tracking-tight uppercase italic">Strike_Engine</h2>
+              </div>
+
+              <div className="mb-8 relative group/upload">
+                <input type="file" accept="image/jpeg" onChange={handleFileUpload} className="absolute inset-0 w-full h-full opacity-0 cursor-pointer z-20" />
+                <div className="border border-white/5 rounded-2xl p-6 bg-white/[0.01] group-hover/upload:bg-white/[0.03] group-hover/upload:border-emerald-500/20 transition-all flex flex-col items-center justify-center gap-2 text-center">
+                  <Upload className="w-4 h-4 text-emerald-500/60" />
+                  <p className="text-[9px] font-mono text-gray-500 uppercase tracking-[0.2em]">Initialize Local Scan</p>
+                </div>
               </div>
 
               <form onSubmit={executeAudit} className="space-y-8">
@@ -185,14 +247,13 @@ export default function CommandDeck() {
             </div>
           </div>
 
-          {/* RIGHT: NEURAL LOG */}
           <div className="lg:col-span-3 space-y-6">
             <div className="bg-[#050505] border border-white/5 rounded-[2.5rem] p-6 h-[350px] flex flex-col shadow-2xl">
               <div className="flex items-center gap-3 mb-6 border-b border-white/5 pb-4">
                 <Terminal className="w-4 h-4 text-emerald-500" />
                 <h3 className="text-[10px] font-mono text-white uppercase tracking-[0.2em]">Neural_Log</h3>
               </div>
-              <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-[9px] space-y-3 text-emerald-500/60 scrollbar-hide">
+              <div ref={scrollRef} className="flex-1 overflow-y-auto font-mono text-[9px] space-y-3 text-emerald-400/60 scrollbar-hide">
                 {terminalLogs.length === 0 ? <p className="text-gray-800 animate-pulse">_ AWAITING_COMMAND...</p> : terminalLogs.map((log, i) => <div key={i} className="flex gap-2"><span className="text-emerald-900">[{i}]</span><span className="break-all">{log}</span></div>)}
               </div>
             </div>
