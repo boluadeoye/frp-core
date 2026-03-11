@@ -53,15 +53,9 @@ export class ForensicAggregator {
     }
   }
 
-  /**
-   * FLAG VI FIX: The "Super Hash" Signature
-   * We now hash the entire audit manifest (Image Hash + Physics + AI Reasoning) 
-   * before signing, ensuring the entire chain of custody is cryptographically anchored.
-   */
   private static generateOracleSignature(traceId: string, fullManifest: any): { signature: string, manifestHash: string } {
     const privateKey = process.env.FRP_PRIVATE_KEY;
     
-    // 1. Create a deterministic string representation of the entire audit
     const manifestString = JSON.stringify({
       traceId,
       headerHash: fullManifest.headerHash,
@@ -73,12 +67,10 @@ export class ForensicAggregator {
       }
     });
 
-    // 2. Generate the SHA-256 "Super Hash" of the manifest
     const manifestHash = crypto.createHash('sha256').update(manifestString).digest('hex');
 
     if (!privateKey) return { signature: "UNSIGNED", manifestHash };
     
-    // 3. Sign the Super Hash
     const sign = crypto.createSign('SHA256');
     sign.update(manifestHash);
     sign.end();
@@ -90,7 +82,7 @@ export class ForensicAggregator {
   }
 
   static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any) {
-    console.log(`[AGGREGATOR] Enterprise Audit: ${traceId}`);
+    console.log(`[AGGREGATOR] Full Spectrum Audit: ${traceId}`);
     
     await this.logStep(traceId, "INGESTION", "FRP_EDGE_WORKER", { imageUrl, headerHash });
 
@@ -98,9 +90,23 @@ export class ForensicAggregator {
       const physics: any = this.calculatePhysics(clientExif);
       await this.logStep(traceId, "PHYSICS_CALC", "SUNCALC_ENGINE", physics);
 
+      // FULL SPECTRUM DETERMINISTIC OVERRIDE
       let physicalLie = false;
-      if (physics.sunAltitude && parseFloat(physics.sunAltitude) < -2 && physics.iso > 0 && physics.iso < 400) {
-        physicalLie = true;
+      let lieReason = "";
+      const alt = parseFloat(physics.sunAltitude);
+      const iso = parseInt(physics.iso);
+
+      if (!isNaN(alt) && !isNaN(iso)) {
+        // Scenario 1: Nighttime GPS + Daylight ISO (e.g., Sun < -2, ISO < 400)
+        if (alt < -2 && iso > 0 && iso < 400) {
+          physicalLie = true;
+          lieReason = "PHYSICS_ALTITUDE_INVALID_NIGHT";
+        }
+        // Scenario 2: Daylight GPS + Nighttime ISO (e.g., Sun > 20, ISO > 1600)
+        else if (alt > 20 && iso > 1600) {
+          physicalLie = true;
+          lieReason = "PHYSICS_ALTITUDE_INVALID_DAY";
+        }
       }
 
       const key = await KeyManager.getValidKey();
@@ -138,28 +144,28 @@ export class ForensicAggregator {
       
       let finalScore = parseFloat(analysis.confidence_score);
       let finalCode = analysis.reasoning_code;
+      let supportingCodes = analysis.supporting_codes ||[];
 
+      // ENFORCE THE OVERRIDE
       if (physicalLie) {
         finalScore = 0.050;
         finalCode = "ERR_PHYSICS_MISMATCH";
-        analysis.supporting_codes =["PHYSICS_ALTITUDE_INVALID", "ISO_EXPOSURE_ANOMALY"];
+        supportingCodes = [lieReason, "ISO_EXPOSURE_ANOMALY"];
       }
 
-      // FLAG VI FIX: Construct the full manifest object for signing
       const fullManifestData = {
         headerHash,
         physics_report: physics,
         fcsScore: finalScore.toFixed(3),
         reasoning_code: finalCode,
-        supporting_codes: analysis.supporting_codes
+        supporting_codes: supportingCodes
       };
 
-      // Generate the Super Hash and Signature
       const { signature, manifestHash } = this.generateOracleSignature(traceId, fullManifestData);
       
       await this.logStep(traceId, "SIGNING", "FRP_ORACLE_KMS", { 
         signature_type: "ECDSA_SECP256K1",
-        manifest_hash: manifestHash, // Now the hash of the ENTIRE audit
+        manifest_hash: manifestHash,
         signature_der: signature,
         public_key_id: "frp-oracle-v1",
         signing_timestamp_rfc3161: new Date().toISOString()
@@ -171,7 +177,7 @@ export class ForensicAggregator {
         oracleSignature: signature,
         forensicManifest: { 
           ...fullManifestData,
-          manifest_hash: manifestHash, // Store the Super Hash in the ledger
+          manifest_hash: manifestHash,
           override: physicalLie
         },
         completedAt: new Date()
