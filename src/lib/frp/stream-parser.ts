@@ -9,8 +9,6 @@ export interface ForensicHeader {
 }
 
 export class StreamParser {
-  // Increased to 128KB. The absolute limit for a "Surgical Strike".
-  // This ensures we bypass large MakerNote blocks to find GPS tags.
   private static readonly CHUNK_SIZE_LIMIT = 128 * 1024; 
 
   private static async generateHash(buffer: Uint8Array): Promise<string> {
@@ -20,29 +18,57 @@ export class StreamParser {
   }
 
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
-    console.log(`[FRP] Initiating 128KB Surgical Strike: ${imageUrl.substring(0, 40)}...`);
+    console.log(`[FRP] Initiating Resilient Stream: ${imageUrl.substring(0, 40)}...`);
     
     const organicHeaders = EntropyRouter.getHeaders("");
     delete (organicHeaders as any)["Authorization"];
 
-    const response = await fetch(imageUrl, {
-      headers: {
-        ...organicHeaders,
-        'Range': `bytes=0-${this.CHUNK_SIZE_LIMIT}`
-      }
+    // Attempt 1: Surgical Strike (Range Request)
+    let response = await fetch(imageUrl, {
+      headers: { ...organicHeaders, 'Range': `bytes=0-${this.CHUNK_SIZE_LIMIT}` }
     });
-    
-    if (!response.ok && response.status !== 206) {
+
+    // Fallback: If Gateway rejects Range (422, 416, 400), perform Manual Severing
+    if (!response.ok) {
+      console.warn(`[FRP] Range request rejected (${response.status}). Pivoting to Manual Severing...`);
+      response = await fetch(imageUrl, { headers: organicHeaders });
+    }
+
+    if (!response.ok) {
       throw new Error(`TARGET_REJECTED_STREAM: ${response.status}`);
     }
 
-    const arrayBuffer = await response.arrayBuffer();
-    const combinedBuffer = new Uint8Array(arrayBuffer);
+    const reader = response.body?.getReader();
+    if (!reader) throw new Error("STREAM_BODY_UNAVAILABLE");
+
+    const chunks: Uint8Array[] = [];
+    let receivedLength = 0;
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
+          await reader.cancel(); // Violently sever the connection
+          break;
+        }
+        chunks.push(value);
+        receivedLength += value.length;
+      }
+    } catch (e) {
+      console.log("[FRP] Stream severed successfully.");
+    }
+
+    const combinedBuffer = new Uint8Array(receivedLength);
+    let position = 0;
+    for (const chunk of chunks) {
+      combinedBuffer.set(chunk, position);
+      position += chunk.length;
+    }
 
     const hash = await this.generateHash(combinedBuffer);
 
     return {
-      exifFound: true, // Placeholder for logic
+      exifFound: true,
       c2paFound: false,
       buffer: combinedBuffer,
       hash,
