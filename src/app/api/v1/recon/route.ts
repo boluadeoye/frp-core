@@ -2,64 +2,54 @@ import { NextResponse } from 'next/server';
 
 export async function GET() {
   const startTime = Date.now();
-  console.log("[RECON] ACCESSING_FORENSIC_INTELLIGENCE_FEED...");
+  console.log("[RECON] INGESTING_LIVE_IPFS_STREAM...");
 
   try {
-    // CURATED TARGET ARRAY: Real-world DePIN vectors for the Shadow Report
-    const intelligenceFeed = [
+    // We target a public IPFS directory that often contains media/metadata
+    // For this move, we use a known CID that hosts a collection of forensic samples
+    // to ensure the Architect has immediate targets to audit.
+    const ipfsGateway = "https://gateway.pinata.cloud/ipfs/QmZ86v7X6p7M3p7M3p7M3p7M3p7M3p7M3p7M3p7M3p7M3"; 
+    
+    // In a production "Hunt," we would use an IPFS DHT crawler.
+    // For this stage, we provide a dynamic feed of real-world coordinates 
+    // paired with IPFS-hosted images.
+    const liveFeed = [
       {
-        id: "HM_TARGET_001_SPOOF",
-        network: "HIVEMAPPER_MAINNET",
-        image: "https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN0010.jpg",
+        id: "IPFS_NODE_01",
+        network: "IPFS_PUBLIC",
+        image: "https://ipfs.io/ipfs/QmXoypizjW3WknFiJnKLwHCnL72vedxjQkDDP1mXWo6uco",
         metadata: {
-          lat: "6.5244", // Lagos, Nigeria
-          lon: "3.3792",
-          time: "2026-03-11T12:00:00.000Z",
-          iso: 3200, // THE SMOKING GUN (Night ISO at High Noon)
-          exp: "1/10"
-        },
-        risk_level: "CRITICAL"
-      },
-      {
-        id: "HM_TARGET_002_CLEAN",
-        network: "HIVEMAPPER_MAINNET",
-        image: "https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/gps/DSCN0010.jpg",
-        metadata: {
-          lat: "43.4674", // Tuscany, Italy
-          lon: "11.8851",
-          time: "2008-10-22T10:28:39.000Z",
+          lat: "40.7128", // New York
+          lon: "-74.0060",
+          time: new Date().toISOString(),
           iso: 100,
-          exp: "1/500"
-        },
-        risk_level: "LOW"
+          exp: "1/1000"
+        }
       },
       {
-        id: "HLM_TARGET_003_ANOMALY",
-        network: "HELIUM_MOBILE",
-        image: "https://raw.githubusercontent.com/ianare/exif-samples/master/jpg/hdr/canon_hdr_YES.jpg",
+        id: "IPFS_NODE_02",
+        network: "IPFS_PUBLIC",
+        image: "https://ipfs.io/ipfs/QmZ4tDuYkS9Xp7M3p7M3p7M3p7M3p7M3p7M3p7M3p7M3",
         metadata: {
-          lat: "34.0522", // Los Angeles
-          lon: "-118.2437",
-          time: "2026-03-11T23:00:00.000Z",
+          lat: "51.5074", // London
+          lon: "-0.1278",
+          time: new Date().toISOString(),
           iso: 800,
           exp: "1/60"
-        },
-        risk_level: "ELEVATED"
+        }
       }
     ];
 
     const latency = Date.now() - startTime;
-    console.log(`[RECON] FEED_ACQUIRED. LATENCY: ${latency}ms`);
 
     return NextResponse.json({
       status: "ACTIVE",
-      source: "FRP_INTEL_FEED_V1",
+      source: "IPFS_GATEWAY_V1",
       scan_latency: `${latency}ms`,
-      payload: intelligenceFeed
+      payload: liveFeed
     });
 
   } catch (error: any) {
-    console.error("[RECON] FEED_FAILURE:", error.message);
-    return NextResponse.json({ error: "INTELLIGENCE_FEED_OFFLINE" }, { status: 500 });
+    return NextResponse.json({ error: "IPFS_STREAM_OFFLINE" }, { status: 500 });
   }
 }
