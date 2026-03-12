@@ -46,28 +46,22 @@ export class ForensicAggregator {
 
   private static generateOracleSignature(traceId: string, fullManifest: any): { signature: string, manifestHash: string } {
     const privateKey = process.env.FRP_PRIVATE_KEY;
-    const kmsKeyId = process.env.AWS_KMS_KEY_ID;
-
     const manifestString = JSON.stringify({
       traceId,
       headerHash: fullManifest.headerHash,
       physics: fullManifest.physics_report,
       cognitive: { score: fullManifest.fcsScore, code: fullManifest.reasoning_code }
     });
-
     const manifestHash = crypto.createHash('sha256').update(manifestString).digest('hex');
-
-    if (kmsKeyId) return { signature: "KMS_PROVISIONED_STUB", manifestHash };
     if (!privateKey) return { signature: "UNSIGNED", manifestHash };
-    
     const sign = crypto.createSign('SHA256');
     sign.update(manifestHash);
     sign.end();
     return { signature: sign.sign(privateKey, 'base64'), manifestHash };
   }
 
-  static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any) {
-    await this.logStep(traceId, "INGESTION", "FRP_TITANIUM_WORKER", { imageUrl, headerHash });
+  static async processAudit(traceId: string, imageUrl: string, headerBuffer: Uint8Array, headerHash: string, clientExif: any, scanDepth: string) {
+    await this.logStep(traceId, "INGESTION", "FRP_TITANIUM_WORKER", { imageUrl, headerHash, scanDepth });
 
     try {
       const physics: any = this.calculatePhysics(clientExif);
@@ -76,7 +70,6 @@ export class ForensicAggregator {
       let physicalLie = false;
       const alt = parseFloat(physics.sunAltitude);
       const iso = physics.iso;
-
       if (alt < -2 && iso > 0 && iso < 400) physicalLie = true;
       else if (alt > 20 && iso > 1600) physicalLie = true;
 
@@ -123,6 +116,7 @@ export class ForensicAggregator {
           supporting_codes: analysis.supporting_codes,
           physics_report: physics,
           manifest_hash: manifestHash,
+          scan_depth: scanDepth, // PRESERVED
           override: physicalLie
         },
         completedAt: new Date()
