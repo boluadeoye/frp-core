@@ -3,11 +3,20 @@ import { StreamParser } from '@/lib/frp/stream-parser';
 import { db } from '@/db';
 import { auditLedger } from '@/db/schema';
 import { ForensicAggregator } from '@/lib/frp/forensic-aggregator';
+import { ratelimit } from '@/lib/frp/ratelimit';
 
 export async function POST(req: Request) {
+  // 1. TITANIUM RATE LIMITING
+  if (ratelimit) {
+    const ip = req.headers.get("x-forwarded-for") ?? "127.0.0.1";
+    const { success } = await ratelimit.limit(ip);
+    if (!success) {
+      return NextResponse.json({ error: "TOO_MANY_REQUESTS" }, { status: 429 });
+    }
+  }
+
   try {
     const body = await req.json();
-    // NEW: Accept clientExif from the payload
     const { imageUrl, agentId, clientExif } = body;
 
     if (!imageUrl || !agentId) {
@@ -16,27 +25,27 @@ export async function POST(req: Request) {
 
     const traceId = crypto.randomUUID();
 
-    // 1. Surgical Header Extraction (8KB is enough now since we don't parse GPS locally)
+    // 2. DYNAMIC RANGE EXTRACTION
     const headerData = await StreamParser.extractHeaders(imageUrl);
 
-    // 2. Log to Ledger
+    // 3. LOG TO LEDGER
     await db.insert(auditLedger).values({
       agentId,
       requestId: traceId,
       imageUrlRef: imageUrl,
       headerHash: headerData.hash,
       status: 'processing',
-      forensicManifest: { preliminary: { exifDetected: headerData.exifFound } }
+      forensicManifest: { preliminary: { scanDepth: headerData.scanDepth } }
     });
 
-    // 3. Execute Zero-Trust Physics Audit
+    // 4. EXECUTE HARDENED AUDIT
     await ForensicAggregator.processAudit(traceId, imageUrl, headerData.buffer, headerData.hash, clientExif);
 
     return NextResponse.json({
       status: 'completed',
       traceId,
       fingerprint: headerData.hash,
-      fcs_preliminary: headerData.exifFound ? 0.8 : 0.2
+      scanDepth: headerData.scanDepth
     }, { status: 200 });
 
   } catch (error: any) {

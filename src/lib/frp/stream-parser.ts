@@ -2,14 +2,15 @@ import { EntropyRouter } from './entropy';
 
 export interface ForensicHeader {
   exifFound: boolean;
-  c2paFound: boolean;
   buffer: Uint8Array;
   hash: string;
   contentType: string | null;
+  scanDepth: string;
 }
 
 export class StreamParser {
-  private static readonly CHUNK_SIZE_LIMIT = 128 * 1024; 
+  private static readonly INITIAL_STRIKE = 128 * 1024; // 128KB
+  private static readonly DEEP_SCAN = 2 * 1024 * 1024; // 2MB for RAW formats
 
   private static async generateHash(buffer: Uint8Array): Promise<string> {
     const hashBuffer = await crypto.subtle.digest('SHA-256', buffer as any);
@@ -17,62 +18,56 @@ export class StreamParser {
     return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
   }
 
+  /**
+   * Detects if the buffer contains a valid EXIF/TIFF header.
+   * Signatures: FFE1 (JPEG), 4949 (TIFF Little Endian), 4D4D (TIFF Big Endian)
+   */
+  private static hasValidHeader(buffer: Uint8Array): boolean {
+    const hex = Array.from(buffer.slice(0, 4))
+      .map(b => b.toString(16).padStart(2, '0'))
+      .join('');
+    return hex.includes('ffe1') || hex.includes('4949') || hex.includes('4d4d');
+  }
+
   static async extractHeaders(imageUrl: string): Promise<ForensicHeader> {
-    console.log(`[FRP] Initiating Resilient Stream: ${imageUrl.substring(0, 40)}...`);
-    
     const organicHeaders = EntropyRouter.getHeaders("");
     delete (organicHeaders as any)["Authorization"];
 
-    // Attempt 1: Surgical Strike (Range Request)
+    // STRIKE 1: 128KB
+    console.log(`[FRP] Strike 1: 128KB Biopsy...`);
     let response = await fetch(imageUrl, {
-      headers: { ...organicHeaders, 'Range': `bytes=0-${this.CHUNK_SIZE_LIMIT}` }
+      headers: { ...organicHeaders, 'Range': `bytes=0-${this.INITIAL_STRIKE}` }
     });
 
-    // Fallback: If Gateway rejects Range (422, 416, 400), perform Manual Severing
     if (!response.ok) {
-      console.warn(`[FRP] Range request rejected (${response.status}). Pivoting to Manual Severing...`);
       response = await fetch(imageUrl, { headers: organicHeaders });
     }
 
-    if (!response.ok) {
-      throw new Error(`TARGET_REJECTED_STREAM: ${response.status}`);
-    }
+    let arrayBuffer = await response.arrayBuffer();
+    let buffer = new Uint8Array(arrayBuffer);
+    let depth = "128KB";
 
-    const reader = response.body?.getReader();
-    if (!reader) throw new Error("STREAM_BODY_UNAVAILABLE");
-
-    const chunks: Uint8Array[] = [];
-    let receivedLength = 0;
-
-    try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done || receivedLength >= this.CHUNK_SIZE_LIMIT) {
-          await reader.cancel(); // Violently sever the connection
-          break;
-        }
-        chunks.push(value);
-        receivedLength += value.length;
+    // DYNAMIC SCALING: If no header found, trigger 2MB Deep Scan
+    if (!this.hasValidHeader(buffer)) {
+      console.log(`[FRP] Header not found. Scaling to 2MB Deep Scan...`);
+      const deepResponse = await fetch(imageUrl, {
+        headers: { ...organicHeaders, 'Range': `bytes=0-${this.DEEP_SCAN}` }
+      });
+      if (deepResponse.ok) {
+        arrayBuffer = await deepResponse.arrayBuffer();
+        buffer = new Uint8Array(arrayBuffer);
+        depth = "2MB";
       }
-    } catch (e) {
-      console.log("[FRP] Stream severed successfully.");
     }
 
-    const combinedBuffer = new Uint8Array(receivedLength);
-    let position = 0;
-    for (const chunk of chunks) {
-      combinedBuffer.set(chunk, position);
-      position += chunk.length;
-    }
-
-    const hash = await this.generateHash(combinedBuffer);
+    const hash = await this.generateHash(buffer);
 
     return {
-      exifFound: true,
-      c2paFound: false,
-      buffer: combinedBuffer,
+      exifFound: this.hasValidHeader(buffer),
+      buffer,
       hash,
-      contentType: response.headers.get('content-type')
+      contentType: response.headers.get('content-type'),
+      scanDepth: depth
     };
   }
 }
