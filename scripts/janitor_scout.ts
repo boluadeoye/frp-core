@@ -3,8 +3,8 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * GHOST JANITOR SCOUT v1.1
- * Fixed for BigInt compatibility across all compilers.
+ * GHOST JANITOR SCOUT v1.2
+ * Fixed for Vercel compatibility.
  */
 
 const RPC_URL = process.env.RPC_URL;
@@ -19,7 +19,8 @@ async function scout() {
 
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
-    const registry = JSON.parse(fs.readFileSync(path.join(__dirname, '../lib/mercenary/registry.json'), 'utf8'));
+    const registryPath = path.join(process.cwd(), 'lib', 'mercenary', 'registry.json');
+    const registry = JSON.parse(fs.readFileSync(registryPath, 'utf8'));
 
     console.log(`[+] SCOUT ACTIVE. WALLET: ${wallet.address}`);
 
@@ -38,7 +39,7 @@ async function scout() {
             const gasEstimate = await contract[target.function].estimateGas();
             const feeData = await provider.getFeeData();
             
-            // Fix: Use BigInt() instead of 0n literal
+            // Use BigInt constructor instead of literal 0n
             const gasPrice = feeData.gasPrice || BigInt(0);
             const gasCost = gasEstimate * gasPrice;
 
@@ -47,7 +48,6 @@ async function scout() {
             if (gasCost < ethers.parseEther(MIN_PROFIT_ETH)) {
                 console.log(`[!!!] PROFITABLE TARGET FOUND. EXECUTING STRIKE...`);
                 const tx = await contract[target.function]({
-                    // Fix: Use BigInt() for math
                     gasLimit: (gasEstimate * BigInt(120)) / BigInt(100)
                 });
                 console.log(`[+] Strike Sent: ${tx.hash}`);
@@ -58,7 +58,7 @@ async function scout() {
             }
 
         } catch (e: any) {
-            console.log(`[-] ${target.name} skipped: ${e.message.substring(0, 50)}...`);
+            console.log(`[-] ${target.name} skipped: ${e.message.substring(0, 60)}...`);
         }
     }
 }
