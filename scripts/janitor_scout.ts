@@ -1,16 +1,10 @@
 import { ethers } from 'ethers';
-import fs from 'fs';
-import path from 'path';
 
 const RPC_URL = process.env.RPC_URL || "https://mainnet.base.org";
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
 
 async function scout() {
-    if (!PRIVATE_KEY) {
-        console.error("[-] PRIVATE_KEY missing.");
-        return;
-    }
-
+    if (!PRIVATE_KEY) return;
     const provider = new ethers.JsonRpcProvider(RPC_URL);
     const wallet = new ethers.Wallet(PRIVATE_KEY, provider);
     
@@ -25,15 +19,11 @@ async function scout() {
 
     for (const target of registry) {
         try {
-            // FIX: Force lowercase then getAddress to bypass checksum traps
             const cleanAddress = ethers.getAddress(target.address.toLowerCase());
             console.log(`[~] Checking ${target.name}...`);
-
             const contract = new ethers.Contract(cleanAddress, [`function ${target.func}() external`], wallet);
 
-            // Simulate the call
             await contract[target.func].staticCall();
-            
             const gasEstimate = await contract[target.func].estimateGas();
             const feeData = await provider.getFeeData();
             const gasCost = gasEstimate * (feeData.gasPrice || BigInt(0));
