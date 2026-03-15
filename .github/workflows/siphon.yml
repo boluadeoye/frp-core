@@ -14,6 +14,8 @@ jobs:
       - run: npm install ethers
       - name: Mine Gas
         run: npx tsx scripts/gas_miner.ts
+      - name: Wait for Fuel
+        run: sleep 10
       - name: Execute Scout
         env:
           RPC_URL: ${{ secrets.RPC_URL }}
