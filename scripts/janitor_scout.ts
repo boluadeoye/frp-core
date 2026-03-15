@@ -3,13 +3,13 @@ import fs from 'fs';
 import path from 'path';
 
 /**
- * GHOST JANITOR SCOUT v1.0
- * Strategy: Simulate-First (eth_call) + Atomic Execution
+ * GHOST JANITOR SCOUT v1.1
+ * Fixed for BigInt compatibility across all compilers.
  */
 
 const RPC_URL = process.env.RPC_URL;
 const PRIVATE_KEY = process.env.PRIVATE_KEY;
-const MIN_PROFIT_ETH = "0.0001"; // ~$0.30 - Adjust based on your survival needs
+const MIN_PROFIT_ETH = "0.0001"; 
 
 async function scout() {
     if (!RPC_URL || !PRIVATE_KEY) {
@@ -33,25 +33,22 @@ async function scout() {
                 wallet
             );
 
-            // 1. THE SIMULATION (eth_call)
-            // We simulate the call to see if it reverts or succeeds.
-            // Note: For some contracts, we'd check a 'pendingRewards' view function first.
             await contract[target.function].staticCall();
 
-            // 2. GAS ESTIMATION
             const gasEstimate = await contract[target.function].estimateGas();
             const feeData = await provider.getFeeData();
-            const gasCost = gasEstimate * (feeData.gasPrice || 0n);
+            
+            // Fix: Use BigInt() instead of 0n literal
+            const gasPrice = feeData.gasPrice || BigInt(0);
+            const gasCost = gasEstimate * gasPrice;
 
             console.log(`[+] Potential Gas Cost: ${ethers.formatEther(gasCost)} ETH`);
 
-            // 3. THE STRIKE DECISION
-            // In a full implementation, we would decode the return value to check the exact profit.
-            // For now, we execute if the simulation passes and gas is low.
             if (gasCost < ethers.parseEther(MIN_PROFIT_ETH)) {
                 console.log(`[!!!] PROFITABLE TARGET FOUND. EXECUTING STRIKE...`);
                 const tx = await contract[target.function]({
-                    gasLimit: (gasEstimate * 120n) / 100n // 20% buffer
+                    // Fix: Use BigInt() for math
+                    gasLimit: (gasEstimate * BigInt(120)) / BigInt(100)
                 });
                 console.log(`[+] Strike Sent: ${tx.hash}`);
                 await tx.wait();
