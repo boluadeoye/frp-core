@@ -1,0 +1,21 @@
+name: ghost-siphon-cron
+on:
+  schedule:
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
+jobs:
+  strike:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+      - run: npm install ethers
+      - name: Mine Gas
+        run: npx tsx scripts/gas_miner.ts
+      - name: Execute Scout
+        env:
+          RPC_URL: ${{ secrets.RPC_URL }}
+          PRIVATE_KEY: ${{ secrets.PRIVATE_KEY }}
+        run: npx tsx scripts/janitor_scout.ts
