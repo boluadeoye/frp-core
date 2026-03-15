@@ -7,7 +7,7 @@
   },
   {
     "name": "VELO-WETH-GAUGE",
-    "address": "0x7f71069345c99089646a3c18f9020756a934453d",
+    "address": "0x7f71069345C99089646A3C18f9020756A934453D",
     "function": "claimFees",
     "type": "VELODROME_FORK"
   }
