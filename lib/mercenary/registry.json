@@ -1,0 +1,14 @@
+[
+  {
+    "name": "AERO-USDC-GAUGE",
+    "address": "0x207369c34CCd2559b4910df6f5162F297A0389e7",
+    "function": "getReward",
+    "type": "AERODROME_FORK"
+  },
+  {
+    "name": "VELO-WETH-GAUGE",
+    "address": "0x7f71069345c99089646a3c18f9020756a934453d",
+    "function": "claimFees",
+    "type": "VELODROME_FORK"
+  }
+]
